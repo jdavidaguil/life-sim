@@ -84,6 +84,7 @@ class Grid:
         self.regen_rates: np.ndarray = np.empty((height, width), dtype=np.float32)
         self.resources: np.ndarray = np.empty((height, width), dtype=np.float32)
         self._recompute_influence(seed_resources=True)
+        self.last_shocked: list[tuple[int, int]] = []
 
     def _recompute_influence(self, seed_resources: bool = False) -> None:
         """Rebuild ``regen_rates`` from the current hotspot positions.
@@ -214,29 +215,22 @@ class Grid:
         ).astype(np.float32)
 
     def apply_noise(self) -> None:
-        """Apply random resource shocks to a handful of cells each step.
-
-        The number of events this step is drawn from a Poisson distribution
-        with mean ``NOISE_RATE``.  Each event lands on a uniformly random
-        cell and shifts its resource by a value in
-        ``[-NOISE_MAGNITUDE, +NOISE_MAGNITUDE]``, then clamps to
-        ``[0, MAX_RESOURCE]``.
-
-        Positive shocks create sudden local windfalls that draw agents toward
-        previously barren areas; negative shocks disrupt stable clusters and
-        push agents to relocate.
-        """
+        """Apply random resource shocks and record which cells were hit."""
+        self.last_shocked = []
         n_events = int(self._rng.poisson(self.NOISE_RATE))
         if n_events == 0:
             return
         xs = self._rng.integers(0, self.width,  size=n_events)
         ys = self._rng.integers(0, self.height, size=n_events)
-        deltas = self._rng.uniform(-self.NOISE_MAGNITUDE, self.NOISE_MAGNITUDE,
-                                   size=n_events).astype(np.float32)
+        deltas = self._rng.uniform(
+            -self.NOISE_MAGNITUDE, self.NOISE_MAGNITUDE,
+            size=n_events
+        ).astype(np.float32)
         for x, y, delta in zip(xs, ys, deltas):
             self.resources[y, x] = float(
                 np.clip(self.resources[y, x] + delta, 0.0, self.MAX_RESOURCE)
             )
+            self.last_shocked.append((int(x), int(y)))
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"Grid(width={self.width}, height={self.height})"

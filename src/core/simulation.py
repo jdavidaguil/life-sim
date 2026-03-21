@@ -40,6 +40,7 @@ class Simulation:
         initial_agents: int,
         seed: Optional[int] = None,
         env_config: dict | None = None,
+        policy_mode: str = "baseline",
     ) -> None:
         """Set up the simulation and place agents at random grid positions.
 
@@ -50,6 +51,7 @@ class Simulation:
             seed: Optional integer seed for reproducible runs.
             env_config: Optional dict of environment overrides (drift_step,
                 noise_rate, noise_magnitude).
+            policy_mode: Movement scorer to use for all agents (`baseline` or `richer`).
         """
         self.width = width
         self.height = height
@@ -71,7 +73,7 @@ class Simulation:
                 id=i,
                 x=int(self.rng.integers(0, width)),
                 y=int(self.rng.integers(0, height)),
-                policy=TraitPolicy(rng=self.rng),
+                policy=TraitPolicy(rng=self.rng, mode=policy_mode),
             )
             self.agents.append(agent)
 
@@ -111,11 +113,20 @@ class Simulation:
         for agent in self.agents:
             occupancy[(agent.x, agent.y)] += 1
 
+        # Compute population mean energy once for richer perception.
+        pop_mean_energy: float = (
+            sum(a.energy for a in self.agents) / len(self.agents)
+            if self.agents else 0.0
+        )
+
         desired: List[float] = []
         for agent in self.agents:
             neighbors = self.grid.get_neighbors(agent.x, agent.y)
             if neighbors:
-                dx, dy = agent.policy.decide(agent, self.grid, occupancy, self.rng)
+                dx, dy = agent.policy.decide(
+                    agent, self.grid, occupancy, self.rng,
+                    pop_mean_energy=pop_mean_energy,
+                )
                 agent.move(dx, dy)
                 agent.last_dx, agent.last_dy = dx, dy
             desired.append(float(self.rng.uniform(0.5, 1.5)))
