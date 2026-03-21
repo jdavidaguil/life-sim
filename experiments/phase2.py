@@ -32,6 +32,7 @@ CONDITIONS: list[Condition] = [
     Condition("B — Fast drift",       drift_step=3, noise_rate=3.0, noise_magnitude=2.0),
     Condition("C — Boom/bust",        drift_step=1, noise_rate=8.0, noise_magnitude=4.0),
     Condition("D — Combined",         drift_step=3, noise_rate=8.0, noise_magnitude=4.0),
+    Condition("E — Steep landscape",  drift_step=1, noise_rate=0.5, noise_magnitude=1.0),
 ]
 
 

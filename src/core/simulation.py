@@ -9,7 +9,7 @@ import numpy as np
 
 from src.core.grid import Grid
 from src.core.agent import Agent
-from src.core.policy import TraitPolicy
+from src.core.policy import TraitPolicy, NeuralPolicy, StatefulNeuralPolicy
 
 # Energy threshold above which an agent reproduces.
 REPRODUCTION_THRESHOLD: float = 18.0
@@ -51,7 +51,7 @@ class Simulation:
             seed: Optional integer seed for reproducible runs.
             env_config: Optional dict of environment overrides (drift_step,
                 noise_rate, noise_magnitude).
-            policy_mode: Movement scorer to use for all agents (`baseline` or `richer`).
+            policy_mode: Movement scorer to use for all agents (`baseline`, `richer`, or `neural`).
         """
         self.width = width
         self.height = height
@@ -73,7 +73,13 @@ class Simulation:
                 id=i,
                 x=int(self.rng.integers(0, width)),
                 y=int(self.rng.integers(0, height)),
-                policy=TraitPolicy(rng=self.rng, mode=policy_mode),
+                policy=(
+                    NeuralPolicy(rng=self.rng)
+                    if policy_mode == "neural"
+                    else StatefulNeuralPolicy(rng=self.rng)
+                    if policy_mode == "stateful"
+                    else TraitPolicy(rng=self.rng, mode=policy_mode)
+                ),
             )
             self.agents.append(agent)
 
@@ -193,17 +199,32 @@ class Simulation:
         self.grid.update_hotspots()
         self.current_step += 1
 
-        traits = np.array([a.policy.traits for a in self.agents], dtype=np.float32)
         self.history["step"].append(self.current_step)
         self.history["total"].append(self.agent_count())
-        self.history["mean_resource_weight"].append(float(traits[:, 0].mean()))
-        self.history["mean_crowd_sensitivity"].append(float(traits[:, 1].mean()))
-        self.history["mean_noise"].append(float(traits[:, 2].mean()))
-        self.history["mean_energy_awareness"].append(float(traits[:, 3].mean()))
-        self.history["std_resource_weight"].append(float(traits[:, 0].std()))
-        self.history["std_crowd_sensitivity"].append(float(traits[:, 1].std()))
-        self.history["std_noise"].append(float(traits[:, 2].std()))
-        self.history["std_energy_awareness"].append(float(traits[:, 3].std()))
+        trait_agents = [a for a in self.agents
+                        if isinstance(a.policy, TraitPolicy)]
+        neural_agents = [a for a in self.agents
+                         if isinstance(a.policy,
+                            (NeuralPolicy, StatefulNeuralPolicy))]
+        if trait_agents:
+            traits = np.array(
+                [a.policy.traits for a in trait_agents],
+                dtype=np.float32,
+            )
+            self.history["mean_resource_weight"].append(float(traits[:, 0].mean()))
+            self.history["mean_crowd_sensitivity"].append(float(traits[:, 1].mean()))
+            self.history["mean_noise"].append(float(traits[:, 2].mean()))
+            self.history["mean_energy_awareness"].append(float(traits[:, 3].mean()))
+            self.history["std_resource_weight"].append(float(traits[:, 0].std()))
+            self.history["std_crowd_sensitivity"].append(float(traits[:, 1].std()))
+            self.history["std_noise"].append(float(traits[:, 2].std()))
+            self.history["std_energy_awareness"].append(float(traits[:, 3].std()))
+        else:
+            for key in ["mean_resource_weight", "mean_crowd_sensitivity",
+                        "mean_noise", "mean_energy_awareness",
+                        "std_resource_weight", "std_crowd_sensitivity",
+                        "std_noise", "std_energy_awareness"]:
+                self.history[key].append(0.0)
 
         if self.current_step % 10 == 0:
             print(
@@ -214,14 +235,27 @@ class Simulation:
             )
 
         if self.current_step % 20 == 0:
-            traits = np.array([a.policy.traits for a in self.agents])
-            print(
-                f"  traits (mean): "
-                f"rw={traits[:,0].mean():.2f}  "
-                f"cs={traits[:,1].mean():.2f}  "
-                f"noise={traits[:,2].mean():.2f}  "
-                f"ea={traits[:,3].mean():.2f}"
-            )
+            if trait_agents:
+                traits = np.array([a.policy.traits for a in trait_agents])
+                print(
+                    f"  traits (mean): "
+                    f"rw={traits[:,0].mean():.2f}  "
+                    f"cs={traits[:,1].mean():.2f}  "
+                    f"noise={traits[:,2].mean():.2f}  "
+                    f"ea={traits[:,3].mean():.2f}"
+                )
+            else:
+                neural_agents = [a for a in self.agents
+                                 if isinstance(a.policy,
+                                    (NeuralPolicy, StatefulNeuralPolicy))]
+                if neural_agents:
+                    norms = [float(np.linalg.norm(a.policy.genome))
+                             for a in neural_agents]
+                    print(
+                        f"  neural genome: "
+                        f"mean_norm={float(np.mean(norms)):.2f}  "
+                        f"std_norm={float(np.std(norms)):.2f}"
+                    )
 
     def plot_history(self, block: bool = True) -> None:  # pragma: no cover
         """Plot population counts, avg energy, and births per policy over time.

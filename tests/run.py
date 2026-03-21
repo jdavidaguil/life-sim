@@ -12,7 +12,7 @@ from src.core.simulation import Simulation
 from src.viz.renderer import Renderer
 from experiments.phase2 import CONDITIONS
 
-POLICY_MODES = ["baseline", "richer"]
+POLICY_MODES = ["baseline", "richer", "neural"]
 
 
 def main() -> None:
@@ -29,9 +29,14 @@ def main() -> None:
     )
     parser.add_argument(
         "--condition", type=str, default=None,
-        choices=["A", "B", "C", "D"],
+        choices=["A", "B", "C", "D", "E"],
         help="Environment condition: A=baseline B=fast_drift "
              "C=boom_bust D=combined (default: baseline)"
+    )
+    parser.add_argument(
+        "--policy-mode", type=str, default="baseline",
+        choices=POLICY_MODES,
+        help="Initial policy mode: baseline, richer, or neural (default: baseline)"
     )
     args = parser.parse_args()
 
@@ -44,7 +49,7 @@ def main() -> None:
         "noise_magnitude": cond.noise_magnitude,
     }
 
-    current_mode = ["baseline"]
+    current_mode = [args.policy_mode]
 
     def make_sim():
         return Simulation(
@@ -74,6 +79,7 @@ def main() -> None:
             sim = make_sim()
             step = 0
             renderer._history.clear()
+            renderer.im_agents = None
 
     renderer.close()
     sim.plot_history(block=True)

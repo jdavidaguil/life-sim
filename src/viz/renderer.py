@@ -81,6 +81,7 @@ class Renderer:
         self._bar_container = None
         self._hotspot_scatter = None
         self._shock_scatter   = None
+        self._agent_panel_kind: str | None = None
 
         self.paused:  bool = False
         self.mode_toggle_requested: bool = False
@@ -132,6 +133,19 @@ class Renderer:
             frame[agent.y, agent.x] = agent.energy / Agent.INITIAL_ENERGY
         return frame
 
+    def _build_neural_frame(self, simulation: Simulation) -> np.ndarray:
+        frame = np.zeros((simulation.height, simulation.width),
+                         dtype=np.float32)
+        counts = np.zeros((simulation.height, simulation.width),
+                          dtype=np.float32)
+        for agent in simulation.agents:
+            genome_norm = float(np.linalg.norm(agent.policy.genome)) / 4.0
+            frame[agent.y, agent.x] += genome_norm
+            counts[agent.y, agent.x] += 1
+        mask = counts > 0
+        frame[mask] /= counts[mask]
+        return np.clip(frame, 0.0, 1.0)
+
     def _blend_history(self) -> np.ndarray:
         ref        = self._history[-1]
         compatible = [f for f in self._history if f.shape == ref.shape]
@@ -147,25 +161,43 @@ class Renderer:
     def render(self, simulation: Simulation, step: int) -> None:
         from src.core.grid import Grid
 
+        mode_str = ""
+        if simulation.agents:
+            mode_str = simulation.agents[0].policy.mode
+
         # ── Agent panel ───────────────────────────────────────────────────
         if self.show_energy:
             current_frame = self._build_energy_frame(simulation)
+            panel_kind = "energy"
+            cmap = "plasma"
+            title = "Agents — energy"
+        elif mode_str == "neural":
+            current_frame = self._build_neural_frame(simulation)
+            panel_kind = "neural"
+            cmap = "magma"
+            title = "Agents — neural genome norm"
         else:
             current_frame = self._build_trait_frame(simulation)
+            panel_kind = "traits"
+            cmap = None
+            title = "Agents  (R=rw  G=noise  B=cs)"
         self._history.append(current_frame)
         blended = self._blend_history()
 
-        if self.im_agents is None:
-            cmap = "plasma" if self.show_energy else None
+        if self.im_agents is None or self._agent_panel_kind != panel_kind:
+            if self.im_agents is not None:
+                try:
+                    self.im_agents.remove()
+                except Exception:
+                    pass
             self.im_agents = self.ax_agents.imshow(
                 blended, origin="upper",
                 cmap=cmap, vmin=0.0, vmax=1.0,
                 interpolation="nearest",
             )
+            self._agent_panel_kind = panel_kind
             self.ax_agents.set_xticks([])
             self.ax_agents.set_yticks([])
-            title = "Agents — energy" if self.show_energy \
-                    else "Agents  (R=rw  G=noise  B=cs)"
             self.ax_agents.set_title(title, color="#dddddd", fontsize=9)
         else:
             self.im_agents.set_data(blended)
@@ -220,7 +252,7 @@ class Renderer:
             )
 
         # ── Trait bar chart ───────────────────────────────────────────────
-        if simulation.agents:
+        if simulation.agents and mode_str != "neural":
             traits = np.array(
                 [a.policy.traits for a in simulation.agents],
                 dtype=np.float32,
@@ -233,33 +265,65 @@ class Renderer:
 
         self.ax_traits.cla()
         self.ax_traits.set_facecolor("#111111")
-        y_pos = np.arange(4)
-
-        bars = self.ax_traits.barh(
-            y_pos, means,
-            color=TRAIT_COLORS,
-            xerr=stds,
-            error_kw=dict(ecolor="#555555", capsize=3),
-            height=0.6,
-        )
-        self.ax_traits.set_xlim(0, 1.5)
-        self.ax_traits.set_yticks(y_pos)
-        self.ax_traits.set_yticklabels(
-            TRAIT_SHORT, color="#aaaaaa", fontsize=9
-        )
         self.ax_traits.tick_params(colors="#aaaaaa")
         for spine in self.ax_traits.spines.values():
             spine.set_edgecolor("#444444")
-        self.ax_traits.set_title("Trait means", color="#dddddd", fontsize=9)
-        self.ax_traits.axvline(x=0.5, color="#333333", lw=0.8, linestyle="--")
-        for bar, mean, std in zip(bars, means, stds):
-            self.ax_traits.text(
-                min(mean + std + 0.05, 1.45),
-                bar.get_y() + bar.get_height() / 2,
-                f"{mean:.2f}",
-                va="center", ha="left",
-                color="#aaaaaa", fontsize=8,
+
+        if mode_str == "neural":
+            if simulation.agents:
+                norms = np.array(
+                    [float(np.linalg.norm(a.policy.genome)) for a in simulation.agents],
+                    dtype=np.float32,
+                )
+                mean_norm = float(norms.mean())
+                std_norm = float(norms.std())
+            else:
+                mean_norm = 0.0
+                std_norm = 0.0
+            bars = self.ax_traits.barh(
+                [0], [mean_norm],
+                color="#c77dca",
+                xerr=[std_norm],
+                error_kw=dict(ecolor="#555555", capsize=3),
+                height=0.6,
             )
+            self.ax_traits.set_xlim(0, max(1.5, mean_norm + std_norm + 0.5))
+            self.ax_traits.set_yticks([0])
+            self.ax_traits.set_yticklabels(["gnorm"], color="#aaaaaa", fontsize=9)
+            self.ax_traits.set_title("Neural genome norm", color="#dddddd", fontsize=9)
+            for bar in bars:
+                self.ax_traits.text(
+                    mean_norm + std_norm + 0.05,
+                    bar.get_y() + bar.get_height() / 2,
+                    f"{mean_norm:.2f}",
+                    va="center", ha="left",
+                    color="#aaaaaa", fontsize=8,
+                )
+        else:
+            y_pos = np.arange(4)
+
+            bars = self.ax_traits.barh(
+                y_pos, means,
+                color=TRAIT_COLORS,
+                xerr=stds,
+                error_kw=dict(ecolor="#555555", capsize=3),
+                height=0.6,
+            )
+            self.ax_traits.set_xlim(0, 1.5)
+            self.ax_traits.set_yticks(y_pos)
+            self.ax_traits.set_yticklabels(
+                TRAIT_SHORT, color="#aaaaaa", fontsize=9
+            )
+            self.ax_traits.set_title("Trait means", color="#dddddd", fontsize=9)
+            self.ax_traits.axvline(x=0.5, color="#333333", lw=0.8, linestyle="--")
+            for bar, mean, std in zip(bars, means, stds):
+                self.ax_traits.text(
+                    min(mean + std + 0.05, 1.45),
+                    bar.get_y() + bar.get_height() / 2,
+                    f"{mean:.2f}",
+                    va="center", ha="left",
+                    color="#aaaaaa", fontsize=8,
+                )
 
         # ── Title ─────────────────────────────────────────────────────────
         population = simulation.agent_count()
@@ -267,11 +331,6 @@ class Renderer:
             sum(a.energy for a in simulation.agents) / population
             if population > 0 else 0.0
         )
-        # Get mode from first agent if available
-        mode_str = ""
-        if simulation.agents:
-            mode_str = simulation.agents[0].policy.mode
-
         self.fig.suptitle(
             f"Step {step}  |  Pop: {population}  |  "
             f"Avg energy: {avg_energy:.1f}  |  "
