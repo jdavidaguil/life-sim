@@ -9,7 +9,7 @@ import numpy as np
 
 from src.core.grid import Grid
 from src.core.agent import Agent
-from src.core.policy import GreedyPolicy, ExplorerPolicy, mutate
+from src.core.policy import TraitPolicy
 
 # Energy threshold above which an agent reproduces.
 REPRODUCTION_THRESHOLD: float = 18.0
@@ -18,8 +18,6 @@ REPRODUCTION_THRESHOLD: float = 18.0
 OVERCROWD_THRESHOLD: int = 3
 # Extra energy drained per agent above the threshold per step.
 OVERCROWD_PENALTY: float = 0.15
-# Probability of policy mutation on reproduction.
-MUTATION_RATE: float = 0.05
 
 
 class Simulation:
@@ -64,20 +62,22 @@ class Simulation:
                 id=i,
                 x=int(self.rng.integers(0, width)),
                 y=int(self.rng.integers(0, height)),
+                policy=TraitPolicy(rng=self.rng),
             )
-            agent.policy = GreedyPolicy() if self.rng.random() < 0.7 else ExplorerPolicy()
             self.agents.append(agent)
 
         # Per-step population history: lists grow by one entry per step.
         self.history: dict[str, List] = {
             "step": [],
             "total": [],
-            "greedy": [],
-            "explorer": [],
-            "greedy_births": [],
-            "explorer_births": [],
-            "greedy_avg_energy": [],
-            "explorer_avg_energy": [],
+            "mean_resource_weight": [],
+            "mean_crowd_sensitivity": [],
+            "mean_noise": [],
+            "mean_energy_awareness": [],
+            "std_resource_weight": [],
+            "std_crowd_sensitivity": [],
+            "std_noise": [],
+            "std_energy_awareness": [],
         }
 
     def step(self) -> None:
@@ -136,8 +136,6 @@ class Simulation:
         survivors: List[Agent] = []
         newborns: List[Agent] = []
         reproductions_this_step: int = 0
-        greedy_births_step: int = 0
-        explorer_births_step: int = 0
 
         for i, agent in enumerate(self.agents):
             agent.energy += gains[i]
@@ -151,15 +149,9 @@ class Simulation:
             if agent.energy > REPRODUCTION_THRESHOLD:
                 child_energy = agent.energy / 2.0
                 agent.energy = child_energy
-                child = Agent(id=self._next_id, x=agent.x, y=agent.y)
+                child = Agent(id=self._next_id, x=agent.x, y=agent.y,
+                             policy=agent.policy.mutate(self.rng))
                 child.energy = child_energy
-                # Mutate policy type on reproduction.
-                child.policy = mutate(agent.policy, self.rng)
-                # Track births per policy of parent.
-                if isinstance(agent.policy, GreedyPolicy):
-                    greedy_births_step += 1
-                else:
-                    explorer_births_step += 1
                 self._next_id += 1
                 newborns.append(child)
                 reproductions_this_step += 1
@@ -181,21 +173,17 @@ class Simulation:
         self.grid.update_hotspots()
         self.current_step += 1
 
-        # ── Record per-policy counts ──────────────────────────────────────────
-        greedy_agents  = [a for a in self.agents if isinstance(a.policy, GreedyPolicy)]
-        explorer_agents = [a for a in self.agents if isinstance(a.policy, ExplorerPolicy)]
-        greedy_n   = len(greedy_agents)
-        explorer_n = len(explorer_agents)
-        greedy_avg   = sum(a.energy for a in greedy_agents)   / greedy_n   if greedy_n   else 0.0
-        explorer_avg = sum(a.energy for a in explorer_agents) / explorer_n if explorer_n else 0.0
+        traits = np.array([a.policy.traits for a in self.agents], dtype=np.float32)
         self.history["step"].append(self.current_step)
         self.history["total"].append(self.agent_count())
-        self.history["greedy"].append(greedy_n)
-        self.history["explorer"].append(explorer_n)
-        self.history["greedy_births"].append(greedy_births_step)
-        self.history["explorer_births"].append(explorer_births_step)
-        self.history["greedy_avg_energy"].append(greedy_avg)
-        self.history["explorer_avg_energy"].append(explorer_avg)
+        self.history["mean_resource_weight"].append(float(traits[:, 0].mean()))
+        self.history["mean_crowd_sensitivity"].append(float(traits[:, 1].mean()))
+        self.history["mean_noise"].append(float(traits[:, 2].mean()))
+        self.history["mean_energy_awareness"].append(float(traits[:, 3].mean()))
+        self.history["std_resource_weight"].append(float(traits[:, 0].std()))
+        self.history["std_crowd_sensitivity"].append(float(traits[:, 1].std()))
+        self.history["std_noise"].append(float(traits[:, 2].std()))
+        self.history["std_energy_awareness"].append(float(traits[:, 3].std()))
 
         if self.current_step % 10 == 0:
             print(
@@ -206,16 +194,13 @@ class Simulation:
             )
 
         if self.current_step % 20 == 0:
+            traits = np.array([a.policy.traits for a in self.agents])
             print(
-                f"  policies: greedy={greedy_n:4d} ({100*greedy_n//max(1,self.agent_count()):2d}%)  "
-                f"explorer={explorer_n:4d} ({100*explorer_n//max(1,self.agent_count()):2d}%)"
-            )
-            print(
-                f"  avg energy: greedy={greedy_avg:5.2f}  explorer={explorer_avg:5.2f}"
-            )
-            print(
-                f"  births:     greedy={greedy_births_step:3d}  "
-                f"explorer={explorer_births_step:3d}"
+                f"  traits (mean): "
+                f"rw={traits[:,0].mean():.2f}  "
+                f"cs={traits[:,1].mean():.2f}  "
+                f"noise={traits[:,2].mean():.2f}  "
+                f"ea={traits[:,3].mean():.2f}"
             )
 
     def plot_history(self, block: bool = True) -> None:  # pragma: no cover
@@ -252,28 +237,26 @@ class Simulation:
             ax.legend(facecolor="#222222", edgecolor="#555555", labelcolor="#dddddd",
                       fontsize=8)
 
-        # Panel 1: population counts
+        # Panel 1: total population
         ax0 = axes[0]
-        ax0.plot(steps, self.history["total"],    color="#ffffff", lw=1.5, label="Total")
-        ax0.plot(steps, self.history["greedy"],   color="#ff4444", lw=1.2, label="Greedy")
-        ax0.plot(steps, self.history["explorer"], color="#4488ff", lw=1.2, label="Explorer")
-        _style(ax0, "Agents", "Population per policy")
+        ax0.plot(steps, self.history["total"], color="#ffffff", lw=1.5, label="Total")
+        _style(ax0, "Agents", "Population")
 
-        # Panel 2: average energy per policy
+        # Panel 2: mean of each trait over time
         ax1 = axes[1]
-        ax1.plot(steps, self.history["greedy_avg_energy"],
-                 color="#ff4444", lw=1.2, label="Greedy avg E")
-        ax1.plot(steps, self.history["explorer_avg_energy"],
-                 color="#4488ff", lw=1.2, label="Explorer avg E")
-        _style(ax1, "Avg energy", "Average energy per policy")
+        ax1.plot(steps, self.history["mean_resource_weight"],   color="#ff4444", lw=1.2, label="rw")
+        ax1.plot(steps, self.history["mean_crowd_sensitivity"], color="#4488ff", lw=1.2, label="cs")
+        ax1.plot(steps, self.history["mean_noise"],             color="#44cc44", lw=1.2, label="noise")
+        ax1.plot(steps, self.history["mean_energy_awareness"],  color="#ffaa00", lw=1.2, label="ea")
+        _style(ax1, "Mean trait", "Mean trait values over time")
 
-        # Panel 3: births per step per policy
+        # Panel 3: std of each trait over time
         ax2 = axes[2]
-        ax2.plot(steps, self.history["greedy_births"],
-                 color="#ff4444", lw=1.0, alpha=0.8, label="Greedy births")
-        ax2.plot(steps, self.history["explorer_births"],
-                 color="#4488ff", lw=1.0, alpha=0.8, label="Explorer births")
-        _style(ax2, "Births / step", "Births per step per policy")
+        ax2.plot(steps, self.history["std_resource_weight"],   color="#ff4444", lw=1.0, alpha=0.8, label="rw")
+        ax2.plot(steps, self.history["std_crowd_sensitivity"], color="#4488ff", lw=1.0, alpha=0.8, label="cs")
+        ax2.plot(steps, self.history["std_noise"],             color="#44cc44", lw=1.0, alpha=0.8, label="noise")
+        ax2.plot(steps, self.history["std_energy_awareness"],  color="#ffaa00", lw=1.0, alpha=0.8, label="ea")
+        _style(ax2, "Std trait", "Trait diversity (std) over time")
         ax2.set_xlabel("Step", color="#aaaaaa")
 
         fig.tight_layout()

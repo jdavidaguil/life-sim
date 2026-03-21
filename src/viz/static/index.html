@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Life Sim</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      margin: 0;
+      background: #111;
+      color: #eee;
+      font-family: system-ui;
+    }
+
+    #header {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 24px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #333;
+      flex-shrink: 0;
+    }
+
+    #header .label { font-weight: bold; font-size: 16px; color: #fff; }
+    #header span { color: #aaa; }
+    #header .value { color: #eee; }
+
+    #grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 1px;
+      background: #333;
+      min-height: 0;
+    }
+
+    .panel {
+      background: #111;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .panel-label {
+      height: 20px;
+      font-size: 11px;
+      color: #888;
+      padding: 2px 8px;
+      flex-shrink: 0;
+    }
+
+    .panel canvas {
+      flex: 1;
+      width: 100%;
+      min-height: 0;
+    }
+
+    #footer {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 11px;
+      color: #666;
+      background: #1a1a1a;
+      border-top: 1px solid #333;
+      flex-shrink: 0;
+    }
+
+    #pause-indicator {
+      color: #ffaa44;
+      font-weight: bold;
+    }
+
+    #overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      color: #eee;
+      z-index: 100;
+    }
+
+    #overlay.visible { display: flex; }
+  </style>
+</head>
+<body>
+
+  <div id="header">
+    <span class="label">Life Sim</span>
+    <span>Step: <span class="value" id="step-val">—</span></span>
+    <span>Population: <span class="value" id="pop-val">—</span></span>
+  </div>
+
+  <div id="grid">
+    <div class="panel">
+      <div class="panel-label">Agents&nbsp;&nbsp;(R=rw&nbsp;&nbsp;G=noise&nbsp;&nbsp;B=cs)</div>
+      <canvas id="canvas-agents"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-label">Resources</div>
+      <canvas id="canvas-resources"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-label">Population</div>
+      <canvas id="canvas-population"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-label">Traits</div>
+      <canvas id="canvas-traits"></canvas>
+    </div>
+  </div>
+
+  <div id="footer">
+    <span>[p] pause &nbsp; [q] quit</span>
+    <span id="pause-indicator"></span>
+  </div>
+
+  <div id="overlay">Simulation ended</div>
+
+  <script>
+    let paused = false;
+    let lastState = null;
+
+    const stepVal        = document.getElementById('step-val');
+    const popVal         = document.getElementById('pop-val');
+    const pauseIndicator = document.getElementById('pause-indicator');
+    const overlay        = document.getElementById('overlay');
+
+    const canvasAgents     = document.getElementById('canvas-agents');
+    const canvasResources  = document.getElementById('canvas-resources');
+    const canvasPopulation = document.getElementById('canvas-population');
+    const canvasTraits     = document.getElementById('canvas-traits');
+
+    const ctxA = canvasAgents.getContext('2d');
+    const ctxR = canvasResources.getContext('2d');
+    const ctxP = canvasPopulation.getContext('2d');
+    const ctxT = canvasTraits.getContext('2d');
+
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    function resizeCanvas(canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.round(rect.width * dpr);
+      const h = Math.round(rect.height * dpr);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      // Scale context so all drawing uses CSS pixel coordinates
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return rect; // returns CSS dimensions
+    }
+
+    function syncSize(canvas) {
+      const panel   = canvas.parentElement;
+      const labelEl = panel.querySelector('.panel-label');
+      const rect    = panel.getBoundingClientRect();
+      canvas.width  = Math.max(1, Math.floor(rect.width));
+      canvas.height = Math.max(1, Math.floor(rect.height - labelEl.offsetHeight));
+    }
+
+    function syncAllSizes() {
+      syncSize(canvasAgents);
+      syncSize(canvasResources);
+      syncSize(canvasPopulation);
+      syncSize(canvasTraits);
+    }
+
+    // ── Agents ────────────────────────────────────────────────────────────────
+    // Sub-cell slot offsets (as fractions of cellW/cellH, relative to cell centre).
+    // Slot 0 = first agent in cell (centre); slots 1-4 spread around it.
+    // Agents beyond slot 4 fall back to slot 4's position (stacked).
+    const AGENT_SLOTS = [
+      [ 0.00,  0.00],
+      [-0.22, -0.20],
+      [ 0.22, -0.20],
+      [-0.22,  0.20],
+      [ 0.22,  0.20],
+    ];
+    const AGENT_DOT_FRAC = 0.42; // dot size as fraction of cell dimension
+
+    function renderAgents(state) {
+      const rect = resizeCanvas(canvasAgents);
+      const w = rect.width, h = rect.height;
+      ctxA.fillStyle = '#000';
+      ctxA.fillRect(0, 0, w, h);
+
+      const cellW = w / state.width;
+      const cellH = h / state.height;
+      const dotW  = cellW * AGENT_DOT_FRAC;
+      const dotH  = cellH * AGENT_DOT_FRAC;
+
+      // Accumulate R, G, B sums and counts per cell, then draw averaged color.
+      const cellCount = state.width * state.height;
+      const sumR = new Float32Array(cellCount);
+      const sumG = new Float32Array(cellCount);
+      const sumB = new Float32Array(cellCount);
+      const cnt  = new Int32Array(cellCount);
+
+      for (const agent of state.agents) {
+        const [x, y, rw, cs, noise, ea] = agent;
+        const idx = y * state.width + x;
+        sumR[idx] += Math.min(rw    / 1.5, 1.0);
+        sumG[idx] += Math.min(noise / 0.8, 1.0);
+        sumB[idx] += Math.min(cs    / 1.0, 1.0);
+        cnt[idx]++;
+      }
+
+      // Track slot assignment for dot positions.
+      const slotCnt = new Int32Array(cellCount);
+
+      for (const agent of state.agents) {
+        const [ax, ay] = agent;
+        const idx  = ay * state.width + ax;
+        const slot = Math.min(slotCnt[idx], AGENT_SLOTS.length - 1);
+        slotCnt[idx]++;
+
+        const [sox, soy] = AGENT_SLOTS[slot];
+        const cx = (ax + 0.5) * cellW;
+        const cy = (ay + 0.5) * cellH;
+
+        const n = cnt[idx];
+        const r = Math.round((sumR[idx] / n) * 255);
+        const g = Math.round((sumG[idx] / n) * 255);
+        const b = Math.round((sumB[idx] / n) * 255);
+        ctxA.fillStyle = `rgb(${r},${g},${b})`;
+        ctxA.fillRect(
+          Math.floor(cx + sox * cellW - dotW / 2),
+          Math.floor(cy + soy * cellH - dotH / 2),
+          Math.ceil(dotW), Math.ceil(dotH)
+        );
+      }
+    }
+
+    // ── Resources ────────────────────────────────────────────────────────────
+    function renderResources(state) {
+      const rect = resizeCanvas(canvasResources);
+      const w = rect.width, h = rect.height;
+      ctxR.fillStyle = '#000';
+      ctxR.fillRect(0, 0, w, h);
+
+      const rows  = state.resources;
+      const gridH = rows.length;
+      const gridW = rows[0].length;
+      const cellW = w / gridW;
+      const cellH = h / gridH;
+
+      for (let y = 0; y < gridH; y++) {
+        for (let x = 0; x < gridW; x++) {
+          const v = rows[y][x];
+          if (v <= 0) continue;
+          const g = Math.round(clamp(v, 0, 1) * 255);
+          ctxR.fillStyle = `rgb(0,${g},0)`;
+          ctxR.fillRect(
+            Math.floor(x * cellW), Math.floor(y * cellH),
+            Math.ceil(cellW),      Math.ceil(cellH)
+          );
+        }
+      }
+    }
+
+    // ── Generic line chart ───────────────────────────────────────────────────
+    const CHART_PADDING = { top: 20, right: 60, bottom: 24, left: 40 };
+
+    function drawLineChart(ctx, w, h, datasets, yMin, yMax, padding) {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, w, h);
+
+      const chartW = w - padding.left - padding.right;
+      const chartH = h - padding.top - padding.bottom;
+      if (chartW <= 0 || chartH <= 0) return;
+
+      const steps = datasets[0]?.xs;
+      if (!steps || steps.length === 0) return;
+      const maxStep = steps[steps.length - 1] || 1;
+      const yRange = yMax - yMin || 1;
+      const tickCount = 4;
+
+      ctx.font = '10px system-ui';
+      ctx.lineWidth = 1;
+
+      // Grid lines and axis labels
+      for (let i = 0; i <= tickCount; i++) {
+        const yVal = yMin + (i / tickCount) * yRange;
+        const y = padding.top + chartH - ((yVal - yMin) / yRange) * chartH;
+        ctx.strokeStyle = '#222';
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartW, y);
+        ctx.stroke();
+
+        ctx.fillStyle = '#555';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(yVal % 1 === 0 ? Math.round(yVal) : yVal.toFixed(1), padding.left - 4, y);
+      }
+
+      for (let i = 0; i <= tickCount; i++) {
+        const stepVal = Math.round((i / tickCount) * maxStep);
+        const x = padding.left + (stepVal / maxStep) * chartW;
+        ctx.strokeStyle = '#222';
+        ctx.beginPath();
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, padding.top + chartH);
+        ctx.stroke();
+
+        ctx.fillStyle = '#555';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(stepVal, x, padding.top + chartH + 4);
+      }
+
+      // Data lines
+      for (const ds of datasets) {
+        if (!ds.ys || ds.ys.length === 0) continue;
+        ctx.strokeStyle = ds.color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        let first = true;
+        for (let i = 0; i < ds.ys.length; i++) {
+          const x = padding.left + (steps[i] / maxStep) * chartW;
+          const y = padding.top + chartH - ((ds.ys[i] - yMin) / yRange) * chartH;
+          if (first) { ctx.moveTo(x, y); first = false; }
+          else        ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      // Current value labels
+      ctx.font = '10px system-ui';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      for (const ds of datasets) {
+        if (!ds.ys || ds.ys.length === 0) continue;
+        const lastValue = ds.ys[ds.ys.length - 1];
+        const y = padding.top + chartH - ((lastValue - yMin) / yRange) * chartH;
+        ctx.fillStyle = ds.color;
+        ctx.fillText(ds.formatValue(lastValue), w - padding.right + 4, y);
+      }
+    }
+
+    // ── Population chart ─────────────────────────────────────────────────────
+    function renderPopulation(state) {
+      const rect = resizeCanvas(canvasPopulation);
+      const w    = rect.width, h = rect.height;
+      const hist = state.history;
+      const yMax = Math.max(...hist.total, 0) * 1.1;
+      drawLineChart(ctxP, w, h, [
+        { xs: hist.steps, ys: hist.total, color: '#ffffff', formatValue: value => `${Math.round(value)}` }
+      ], 0, yMax, CHART_PADDING);
+    }
+
+    // ── Traits chart ─────────────────────────────────────────────────────────
+    const TRAIT_LEGEND = [
+      { key: 'mean_rw',    color: '#ff4444', label: 'rw' },
+      { key: 'mean_cs',    color: '#4488ff', label: 'cs' },
+      { key: 'mean_noise', color: '#44ff88', label: 'noise' },
+      { key: 'mean_ea',    color: '#ffaa44', label: 'ea' },
+    ];
+
+    function renderTraits(state) {
+      console.log("traits sample:", {
+        rw:    state.history.mean_rw?.slice(-1)[0],
+        cs:    state.history.mean_cs?.slice(-1)[0],
+        noise: state.history.mean_noise?.slice(-1)[0],
+        ea:    state.history.mean_ea?.slice(-1)[0]
+      });
+      const rect = resizeCanvas(canvasTraits);
+      const w = rect.width, h = rect.height;
+      const hist = state.history;
+      const datasets = TRAIT_LEGEND.map(t => ({
+        xs: hist.steps,
+        ys: hist[t.key],
+        color: t.color,
+        formatValue: value => value.toFixed(2),
+      }));
+      drawLineChart(ctxT, w, h, datasets, 0, 1.5, CHART_PADDING);
+
+      // Legend: inside top-right corner
+      const LEG_PAD = 12;
+      const LEG_LINE = 18;
+      const LEG_SQ = 12;
+      ctxT.font = '12px system-ui';
+      ctxT.textAlign = 'left';
+      ctxT.textBaseline = 'top';
+      let lx = w - LEG_PAD - LEG_SQ - 4 - 36; // square + gap + ~label width
+      let ly = LEG_PAD;
+      for (const t of TRAIT_LEGEND) {
+        ctxT.fillStyle = t.color;
+        ctxT.fillRect(lx, ly, LEG_SQ, LEG_SQ);
+        ctxT.fillStyle = '#ccc';
+        ctxT.fillText(t.label, lx + LEG_SQ + 4, ly);
+        ly += LEG_LINE;
+      }
+    }
+
+    // ── Main render ───────────────────────────────────────────────────────────
+    function render(state) {
+      stepVal.textContent = state.step;
+      popVal.textContent  = state.population;
+      renderAgents(state);
+      renderResources(state);
+      renderPopulation(state);
+      renderTraits(state);
+    }
+
+    // ── Polling ───────────────────────────────────────────────────────────────
+    async function poll() {
+      try {
+        const resp = await fetch('/state');
+        if (resp.ok) {
+          const state = await resp.json();
+          lastState = state;
+          if (!paused) render(state);
+        }
+      } catch (_) { /* server not ready yet */ }
+      setTimeout(poll, 100);
+    }
+
+    // ── Keyboard ──────────────────────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+      if (e.key === 'p') {
+        paused = !paused;
+        pauseIndicator.textContent = paused ? '⏸ PAUSED' : '';
+        if (!paused && lastState) render(lastState);
+      } else if (e.key === 'q') {
+        fetch('/quit').catch(() => {});
+        overlay.classList.add('visible');
+      }
+    });
+
+    // ── Resize ────────────────────────────────────────────────────────────────
+    const ro = new ResizeObserver(() => {
+      resizeCanvas(canvasAgents);
+      resizeCanvas(canvasResources);
+      resizeCanvas(canvasPopulation);
+      resizeCanvas(canvasTraits);
+      if (lastState) render(lastState);
+    });
+    ro.observe(document.getElementById('grid'));
+
+    syncAllSizes();
+    poll();
+  </script>
+</body>
+</html>

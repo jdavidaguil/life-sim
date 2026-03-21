@@ -37,7 +37,7 @@ class Agent:
                 construction continues to work unchanged.
         """
         # Import here to avoid circular dependency at module load time.
-        from src.core.policy import GreedyPolicy
+        from src.core.policy import TraitPolicy
 
         self.id = id
         self.x = x
@@ -46,7 +46,7 @@ class Agent:
         self.alive: bool = True
         self.last_dx: int = 0
         self.last_dy: int = 0
-        self.policy: "Policy" = policy if policy is not None else GreedyPolicy()
+        self.policy: "Policy" = policy if policy is not None else TraitPolicy(rng=__import__("numpy").random.default_rng())
 
     def move(self, dx: int, dy: int) -> None:
         """Translate the agent's position by (dx, dy).

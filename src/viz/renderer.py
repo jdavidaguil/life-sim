@@ -11,36 +11,7 @@ import matplotlib.colorbar
 import numpy as np
 
 from src.core.agent import Agent
-from src.core.policy import GreedyPolicy, ExplorerPolicy
 from src.core.simulation import Simulation
-
-# RGB arrays used by _build_policy_frame (accumulation) and legend patches.
-_GREEDY_RGB       = np.array([1.0,  0.15, 0.15], dtype=np.float32)  # red
-_EXPLORER_RGB     = np.array([0.15, 0.45, 1.0],  dtype=np.float32)  # blue
-_BRIGHTNESS_SCALE: float = 1.5
-
-# Hex equivalents kept for legend facecolor (consistent hue, ignores gamma).
-_GREEDY_HEX   = "#ff2626"   # vivid red
-_EXPLORER_HEX = "#2570ff"   # vivid blue
-
-
-def _make_policy_legend(ax: plt.Axes) -> plt.Legend:
-    """Create a fixed, always-readable policy colour legend for *ax*."""
-    handles = [
-        mpatches.Patch(facecolor=_GREEDY_RGB,   edgecolor="#ffffff", linewidth=0.5,
-                       label="■  Greedy  (red)"),
-        mpatches.Patch(facecolor=_EXPLORER_RGB, edgecolor="#ffffff", linewidth=0.5,
-                       label="■  Explorer (blue)"),
-    ]
-    return ax.legend(
-        handles=handles,
-        loc="upper left",
-        fontsize=8,
-        framealpha=0.85,
-        facecolor="#1a1a1a",
-        edgecolor="#555555",
-        labelcolor="#eeeeee",
-    )
 
 
 class Renderer:
@@ -56,14 +27,11 @@ class Renderer:
 
     **Left panel modes** (controlled by ``show_energy``):
 
-    * ``show_energy=False`` *(default)* — RGB policy map.
-      Each cell is coloured by the mix of strategies present:
-      greedy agents contribute red, explorers contribute blue.
-      Brightness scales with agent count (soft-capped at
-      ``_BRIGHTNESS_SCALE`` agents).  A fading-trail effect
-      blends the last ``trail_length`` frames.
-    * ``show_energy=True`` — scalar energy heatmap (plasma colormap),
-      identical to the original behaviour.
+    * ``show_energy=False`` *(default)* — RGB trait map.
+      Each cell is coloured by the mean traits of agents present:
+      R=resource_weight, G=energy_awareness, B=crowd_sensitivity.
+      A fading-trail effect blends the last ``trail_length`` frames.
+    * ``show_energy=True`` — scalar energy heatmap (plasma colormap).
 
     Press **e** at runtime to toggle between modes.
 
@@ -134,7 +102,6 @@ class Renderer:
         self.im_r: plt.AxesImage | None = None
         self.cbar: matplotlib.colorbar.Colorbar | None = None
         self.cbar_r: matplotlib.colorbar.Colorbar | None = None
-        self._policy_legend: list | None = None  # legend handles
         self.paused: bool = False
         self.running: bool = True
         self.fig.canvas.mpl_connect("key_press_event", self._on_key)
@@ -164,32 +131,31 @@ class Renderer:
                 self.cax.cla()
                 self.cbar = None
             self.cax.set_visible(self.show_energy)
-            if self._policy_legend is not None:
-                for h in self._policy_legend:
-                    try:
-                        h.remove()
-                    except Exception:
-                        pass
-                self._policy_legend = None
             self._history.clear()
 
     # ── Frame builders ────────────────────────────────────────────────────────
 
     def _build_policy_frame(self, simulation: Simulation) -> np.ndarray:
-        """Return an RGB array (H×W×3) encoding policy composition per cell.
+        """Return an RGB array (H×W×3) encoding trait composition per cell.
 
-        Each cell accumulates red from GreedyPolicy agents and blue from
-        ExplorerPolicy agents, scaled so that ``_BRIGHTNESS_SCALE`` agents of
-        one type fills the channel to 1.0.  Mixed cells show purple hues.
+        R channel: mean resource_weight of agents on cell (normalized to 0-2)
+        G channel: mean energy_awareness of agents on cell (normalized to 0-2)
+        B channel: mean crowd_sensitivity of agents on cell (normalized to 0-2)
+        Black cells have no agents.
         """
         h, w = simulation.height, simulation.width
         frame = np.zeros((h, w, 3), dtype=np.float32)
+        counts = np.zeros((h, w), dtype=np.float32)
         for agent in simulation.agents:
-            if isinstance(agent.policy, GreedyPolicy):
-                frame[agent.y, agent.x] += _GREEDY_RGB
-            else:
-                frame[agent.y, agent.x] += _EXPLORER_RGB
-        frame /= _BRIGHTNESS_SCALE
+            t = agent.policy.traits
+            frame[agent.y, agent.x, 0] += t[0]  # resource_weight -> R
+            frame[agent.y, agent.x, 1] += t[3]  # energy_awareness -> G
+            frame[agent.y, agent.x, 2] += t[1]  # crowd_sensitivity -> B
+            counts[agent.y, agent.x] += 1
+        mask = counts > 0
+        for c in range(3):
+            frame[:, :, c][mask] /= counts[mask]
+        frame /= 2.0  # normalize: traits sampled up to ~2.0
         return np.clip(frame, 0.0, 1.0)
 
     def _build_energy_frame(self, simulation: Simulation) -> np.ndarray:
@@ -243,8 +209,6 @@ class Renderer:
             sum(a.energy for a in simulation.agents) / population
             if population > 0 else 0.0
         )
-        greedy_n = sum(1 for a in simulation.agents if isinstance(a.policy, GreedyPolicy))
-        explorer_n = population - greedy_n
 
         # ── Left panel: recreate when im is None (first render or mode toggle) ──
         if self.im is None:
@@ -263,9 +227,7 @@ class Renderer:
                     vmin=0.0, vmax=1.0, interpolation="nearest",
                 )
                 self.cax.set_visible(False)
-                leg = _make_policy_legend(self.ax)
-                self._policy_legend = [leg]
-                self.ax.set_title("Agents — policy", fontsize=10)
+                self.ax.set_title("Agents — traits (R=rw, G=ea, B=cs)", fontsize=10)
             self.ax.set_xticks([])
             self.ax.set_yticks([])
         else:
@@ -287,8 +249,6 @@ class Renderer:
 
         self.fig.suptitle(
             f"Step {step}  |  Pop: {population}  |  "
-            f"Greedy: {greedy_n} ({100*greedy_n//max(1,population)}%)  "
-            f"Explorer: {explorer_n} ({100*explorer_n//max(1,population)}%)  |  "
             f"Avg energy: {avg_energy:.1f}  |  [e] toggle mode",
             fontsize=9,
         )
