@@ -23,13 +23,13 @@ if __name__ == "__main__":
     print("Running simulation twice with fixed seed (seed=42)")
     print("=" * 60)
     
-    result1 = run_simulation(seed=42, steps=50)
+    result1 = run_simulation(seed=42, steps=200)
     print("\nRun 1:")
     print(f"  Final agents: {result1['agents']}")
     print(f"  Total reproductions: {result1['reproductions']}")
     print(f"  Steps completed: {result1['current_step']}")
     
-    result2 = run_simulation(seed=42, steps=50)
+    result2 = run_simulation(seed=42, steps=200)
     print("\nRun 2:")
     print(f"  Final agents: {result2['agents']}")
     print(f"  Total reproductions: {result2['reproductions']}")

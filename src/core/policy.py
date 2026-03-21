@@ -64,8 +64,8 @@ class GreedyPolicy(Policy):
 
     EXPLORE_PROB: float = 0.15
     OVERCROWD_THRESHOLD: int = 3
-    OVERCROWD_PENALTY: float = 0.15
-    INERTIA_BONUS: float = 0.5
+    OVERCROWD_PENALTY: float = 0.4
+    INERTIA_BONUS: float = 0.1
 
     def decide(
         self,
@@ -113,7 +113,7 @@ class ExplorerPolicy(Policy):
             explorers are predominantly random).
     """
 
-    EXPLORE_PROB: float = 0.6
+    EXPLORE_PROB: float = 0.4
 
     def decide(
         self,
