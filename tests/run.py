@@ -1,4 +1,4 @@
-"""Run a simulation session with browser-based visualisation.
+"""Run a simulation session with the desktop renderer.
 
 Usage:
     python -m tests.run
@@ -7,32 +7,40 @@ Usage:
 """
 
 import argparse
-import time
 
 from src.core.simulation import Simulation
-import src.viz.server as server
+from src.viz.renderer import Renderer
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run simulation with browser-based visualisation.")
-    parser.add_argument("--steps", type=int, default=1000, help="Number of steps to run (default: 1000)")
-    parser.add_argument("--seed", type=int, default=None, help="Random seed (default: random)")
+    parser = argparse.ArgumentParser(
+        description="Run simulation with desktop visualisation."
+    )
+    parser.add_argument(
+        "--steps", type=int, default=1000,
+        help="Number of steps to run (default: 1000)"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=None,
+        help="Random seed (default: random)"
+    )
     args = parser.parse_args()
 
-    sim = Simulation(width=50, height=50, initial_agents=100, seed=args.seed)
-    server.start(open_browser=True)
+    sim = Simulation(
+        width=50, height=50,
+        initial_agents=100,
+        seed=args.seed,
+    )
+    renderer = Renderer(delay=0.05)
 
     for step in range(args.steps):
+        if not renderer.running:
+            break
         sim.step()
-        server.update_state(sim, step)
-        time.sleep(0.05)
+        renderer.render(sim, step)
 
-    print("Simulation complete.")
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        pass
+    renderer.close()
+    sim.plot_history(block=True)
 
 
 if __name__ == "__main__":

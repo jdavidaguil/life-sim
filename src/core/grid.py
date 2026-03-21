@@ -46,6 +46,9 @@ class Grid:
         width: int,
         height: int,
         rng: Optional[np.random.Generator] = None,
+        drift_step: int = None,
+        noise_rate: float = None,
+        noise_magnitude: float = None,
     ) -> None:
         """Initialise the grid, place hotspots, and fill resources accordingly.
 
@@ -54,9 +57,20 @@ class Grid:
             height: Number of rows.
             rng: NumPy random generator used for all stochastic decisions.
                 A fresh default generator is created when *rng* is ``None``.
+            drift_step: Override for DRIFT_STEP (max single-step displacement).
+            noise_rate: Override for NOISE_RATE (expected noise events per step).
+            noise_magnitude: Override for NOISE_MAGNITUDE (max resource change per event).
         """
         if rng is None:
             rng = np.random.default_rng()
+
+        # Allow per-instance override of environment parameters.
+        if drift_step is not None:
+            self.DRIFT_STEP = drift_step
+        if noise_rate is not None:
+            self.NOISE_RATE = noise_rate
+        if noise_magnitude is not None:
+            self.NOISE_MAGNITUDE = noise_magnitude
 
         self._rng = rng
         self.width = width

@@ -39,6 +39,7 @@ class Simulation:
         height: int,
         initial_agents: int,
         seed: Optional[int] = None,
+        env_config: dict | None = None,
     ) -> None:
         """Set up the simulation and place agents at random grid positions.
 
@@ -47,13 +48,21 @@ class Simulation:
             height: Number of grid rows.
             initial_agents: Number of agents to spawn at random positions.
             seed: Optional integer seed for reproducible runs.
+            env_config: Optional dict of environment overrides (drift_step,
+                noise_rate, noise_magnitude).
         """
         self.width = width
         self.height = height
         self.current_step: int = 0
         self.reproductions_total: int = 0
         self.rng: np.random.Generator = np.random.default_rng(seed)
-        self.grid = Grid(width, height, rng=self.rng)
+        env_config = env_config or {}
+        self.grid = Grid(
+            width, height, rng=self.rng,
+            drift_step=env_config.get("drift_step"),
+            noise_rate=env_config.get("noise_rate"),
+            noise_magnitude=env_config.get("noise_magnitude"),
+        )
         self._next_id: int = initial_agents
 
         self.agents: List[Agent] = []
