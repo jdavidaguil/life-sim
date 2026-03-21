@@ -136,3 +136,27 @@ class ExplorerPolicy(Policy):
             nx, ny = max(neighbors, key=_score)
 
         return (nx - agent.x, ny - agent.y)
+
+
+POLICIES: list[type] = [GreedyPolicy, ExplorerPolicy]
+
+
+def mutate(policy, rng: np.random.Generator) -> object:
+    """Return a new policy instance, possibly of a different type.
+    
+    With probability MUTATION_RATE a random different policy type is chosen;
+    otherwise the same type is re-instantiated.
+    
+    Args:
+        policy: The parent agent's current policy instance.
+        rng: Seeded NumPy random generator for reproducibility.
+    
+    Returns:
+        A new policy object.
+    """
+    from src.core.simulation import MUTATION_RATE
+    if rng.random() < MUTATION_RATE:
+        other_types = [p for p in POLICIES if p is not type(policy)]
+        if other_types:
+            return other_types[int(rng.integers(0, len(other_types)))]()
+    return type(policy)()

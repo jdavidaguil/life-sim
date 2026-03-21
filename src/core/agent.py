@@ -61,49 +61,6 @@ class Agent:
         self.x += dx
         self.y += dy
 
-    def step(self, grid, agents: list | None = None) -> None:  # type: ignore[type-arg]
-        """Execute one action for this agent using the attached policy.
-
-        When *agents* is provided the policy is expected to follow the
-        :func:`~src.core.policies.get_observation` / ``choose_move`` protocol
-        (the lightweight ``policies.py`` interface).  If the current policy
-        does not expose ``choose_move``, the method is a no-op so that agents
-        running the ABC-based ``policy.py`` interface remain compatible.
-
-        The move is applied with toroidal (modulo) wrapping.
-
-        Args:
-            grid: The :class:`~src.core.grid.Grid` the agent inhabits.
-            agents: Full agent roster.  Required when using
-                :class:`~src.core.policies.ExplorerPolicy` /
-                :class:`~src.core.policies.GreedyPolicy` from ``policies.py``.
-        """
-        if agents is None or not hasattr(self.policy, "choose_move"):
-            return
-        from src.core.policies import get_observation
-        obs = get_observation(self, grid, agents)
-        dx, dy = self.policy.choose_move(obs)
-        self.x = (self.x + dx) % grid.width
-        self.y = (self.y + dy) % grid.height
-        self.last_dx, self.last_dy = dx, dy
-
-    def reproduce(self) -> "Agent":
-        """Create a child agent via energy-split reproduction.
-
-        The parent's energy is halved in place.  The child starts at the same
-        position with the other half and receives a (possibly mutated) copy of
-        the parent's policy via :func:`~src.core.policies.mutate`.
-
-        Returns:
-            A new :class:`Agent` with ``id`` set to ``-1`` (caller should
-            assign a proper unique id before adding to the simulation).
-        """
-        from src.core.policies import mutate
-        self.energy /= 2.0
-        child = Agent(id=-1, x=self.x, y=self.y, policy=mutate(self.policy))
-        child.energy = self.energy
-        return child
-
     def __repr__(self) -> str:  # pragma: no cover
         return (
             f"Agent(id={self.id}, x={self.x}, y={self.y}, "

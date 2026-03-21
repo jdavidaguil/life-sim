@@ -61,7 +61,6 @@ class Grid:
         self._rng = rng
         self.width = width
         self.height = height
-        self.cells: np.ndarray = np.zeros((height, width), dtype=np.int32)
 
         # Pick initial hotspot centres.
         self.hotspot_xs: np.ndarray = rng.integers(0, width,  size=self.NUM_HOTSPOTS)
@@ -224,18 +223,6 @@ class Grid:
             self.resources[y, x] = float(
                 np.clip(self.resources[y, x] + delta, 0.0, self.MAX_RESOURCE)
             )
-
-    def get(self, x: int, y: int) -> int:
-        """Return the value at cell (x, y)."""
-        return int(self.cells[y, x])
-
-    def set(self, x: int, y: int, value: int) -> None:
-        """Write *value* to cell (x, y)."""
-        self.cells[y, x] = value
-
-    def reset(self) -> None:
-        """Zero every cell in the grid."""
-        self.cells[:] = 0
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"Grid(width={self.width}, height={self.height})"

@@ -9,7 +9,7 @@ import numpy as np
 
 from src.core.grid import Grid
 from src.core.agent import Agent
-from src.core.policy import GreedyPolicy, ExplorerPolicy
+from src.core.policy import GreedyPolicy, ExplorerPolicy, mutate
 
 # Energy threshold above which an agent reproduces.
 REPRODUCTION_THRESHOLD: float = 18.0
@@ -18,6 +18,8 @@ REPRODUCTION_THRESHOLD: float = 18.0
 OVERCROWD_THRESHOLD: int = 3
 # Extra energy drained per agent above the threshold per step.
 OVERCROWD_PENALTY: float = 0.15
+# Probability of policy mutation on reproduction.
+MUTATION_RATE: float = 0.05
 
 
 class Simulation:
@@ -151,15 +153,8 @@ class Simulation:
                 agent.energy = child_energy
                 child = Agent(id=self._next_id, x=agent.x, y=agent.y)
                 child.energy = child_energy
-                # 7% chance to mutate policy type on reproduction.
-                if self.rng.random() < 0.07:
-                    child.policy = (
-                        ExplorerPolicy()
-                        if isinstance(agent.policy, GreedyPolicy)
-                        else GreedyPolicy()
-                    )
-                else:
-                    child.policy = type(agent.policy)()
+                # Mutate policy type on reproduction.
+                child.policy = mutate(agent.policy, self.rng)
                 # Track births per policy of parent.
                 if isinstance(agent.policy, GreedyPolicy):
                     greedy_births_step += 1
