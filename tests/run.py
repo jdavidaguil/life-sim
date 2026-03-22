@@ -8,12 +8,20 @@ Usage:
 
 import argparse
 
-from src.core.simulation import Simulation
-from src.viz.renderer import Renderer
 from experiments.phase2 import CONDITIONS
 from experiments.phase5 import create_phase5_simulation
+from experiments.phase6_baseline import create_phase6_simulation
+from src.core.simulation import Simulation
+from src.viz.renderer import Renderer
 
-POLICY_MODES = ["baseline", "richer", "neural", "phase5"]
+POLICY_MODES = [
+    "baseline",
+    "richer",
+    "neural",
+    "phase5",
+    "phase6-neural",
+    "phase6-stateful",
+]
 
 
 def main() -> None:
@@ -37,7 +45,10 @@ def main() -> None:
     parser.add_argument(
         "--policy-mode", type=str, default="baseline",
         choices=POLICY_MODES,
-        help="Initial policy mode: baseline, richer, neural, or phase5 (default: baseline)"
+        help=(
+            "Initial policy mode: baseline, richer, neural, phase5, "
+            "phase6-neural, or phase6-stateful (default: baseline)"
+        )
     )
     args = parser.parse_args()
 
@@ -55,6 +66,10 @@ def main() -> None:
     def current_condition_label() -> str:
         if current_mode[0] == "phase5":
             return f"{cond.name} | Phase 5 preset"
+        if current_mode[0] == "phase6-neural":
+            return f"{cond.name} | Phase 6 neural warm-start"
+        if current_mode[0] == "phase6-stateful":
+            return f"{cond.name} | Phase 6 stateful warm-start"
         return cond.name
 
     def make_sim():
@@ -62,6 +77,18 @@ def main() -> None:
             return create_phase5_simulation(
                 seed=args.seed,
                 condition=cond,
+            )
+        if current_mode[0] == "phase6-neural":
+            return create_phase6_simulation(
+                seed=args.seed,
+                condition=cond,
+                policy_mode="neural",
+            )
+        if current_mode[0] == "phase6-stateful":
+            return create_phase6_simulation(
+                seed=args.seed,
+                condition=cond,
+                policy_mode="stateful",
             )
         return Simulation(
             width=50, height=50,

@@ -11,6 +11,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib.colorbar
 import numpy as np
 from matplotlib.image import AxesImage
+from matplotlib.lines import Line2D
 
 from src.core.agent import Agent
 from src.core.simulation import Simulation
@@ -46,7 +47,7 @@ class Renderer:
 
     def __init__(
         self,
-        figsize: tuple[int, int] = (16, 5),
+        figsize: tuple[int, int] = (14, 9),
         delay: float = 0.05,
         trail_length: int = 6,
         decay: float = 0.7,
@@ -56,15 +57,24 @@ class Renderer:
         plt.ion()
         self.fig = plt.figure(figsize=figsize, facecolor="#111111")
         gs = gridspec.GridSpec(
-            1, 3, figure=self.fig,
+            2, 3, figure=self.fig,
             width_ratios=[10, 10, 5],
+            height_ratios=[10, 6],
             wspace=0.3,
+            hspace=0.45,
         )
         self.ax_agents   = self.fig.add_subplot(gs[0, 0])
         self.ax_res      = self.fig.add_subplot(gs[0, 1])
         self.ax_traits   = self.fig.add_subplot(gs[0, 2])
+        self.ax_pop      = self.fig.add_subplot(gs[1, 0:3])
+        self.ax_trait    = None
 
-        for ax in [self.ax_agents, self.ax_res, self.ax_traits]:
+        for ax in [
+            self.ax_agents,
+            self.ax_res,
+            self.ax_traits,
+            self.ax_pop,
+        ]:
             ax.set_facecolor("#111111")
 
         self.delay          = delay
@@ -88,6 +98,14 @@ class Renderer:
         self.paused:  bool = False
         self.mode_toggle_requested: bool = False
         self.running: bool = True
+        self._pop_line: Line2D | None = None
+        self._probe_line: Line2D | None = None
+        self._probe_ref_line = None
+        self._probe_history: list[float] = []
+        self._probe_steps: list[int] = []
+        self._probe_input: np.ndarray | None = None
+        self._trait_lines: dict = {}
+        self._history_x: list[int] = []
         self.fig.canvas.mpl_connect("key_press_event", self._on_key)
 
     def _on_key(self, event) -> None:
@@ -104,6 +122,10 @@ class Renderer:
                     pass
                 self.im_agents = None
             self._history.clear()
+            self._probe_history.clear()
+            self._probe_steps.clear()
+            self._probe_line = None
+            self._probe_ref_line = None
         elif event.key == 'm':
             self.mode_toggle_requested = True
 
@@ -171,6 +193,184 @@ class Renderer:
             blended += past * (self.decay ** age)
         max_weight = sum(self.decay ** i for i in range(n))
         return np.sqrt(np.clip(blended / max_weight, 0.0, 1.0))
+
+    def _compute_probe_spread(self, simulation: Simulation) -> float | None:
+        """Compute directional sensitivity for a fixed test input.
+
+        Uses max resource to north, no crowding anywhere.
+        Returns spread = max_prob - min_prob, or None if not applicable.
+        """
+        from src.core.policy import NeuralPolicy, StatefulNeuralPolicy
+
+        if not simulation.agents:
+            return None
+        agent = simulation.agents[0]
+        policy = agent.policy
+        if not isinstance(policy, (NeuralPolicy, StatefulNeuralPolicy)):
+            return None
+        if self._probe_input is None:
+            probe_input = np.zeros(18, dtype=np.float32)
+            probe_input[1] = 1.0
+            self._probe_input = probe_input
+        try:
+            result = policy._forward(self._probe_input)
+            if isinstance(result, tuple):
+                probs = result[0]
+            else:
+                probs = result
+            return float(probs.max() - probs.min())
+        except Exception:
+            return None
+
+    def _draw_history_panels(self, simulation: Simulation) -> None:
+        """Update the bottom two history panels."""
+        from src.core.policy import TraitPolicy, NeuralPolicy, StatefulNeuralPolicy
+
+        steps = simulation.history["step"]
+        if not steps:
+            return
+
+        self._history_x = list(steps)
+
+        ax = self.ax_pop
+        total = simulation.history["total"]
+
+        if self._pop_line is None:
+            ax.set_facecolor("#111111")
+            ax.tick_params(colors="#aaaaaa", labelsize=8)
+            for spine in ax.spines.values():
+                spine.set_edgecolor("#444444")
+            ax.set_ylabel("Agents", color="#aaaaaa", fontsize=8)
+            ax.set_title("Population", color="#dddddd", fontsize=9)
+            self._pop_line, = ax.plot(
+                steps, total, color="#ffffff", lw=1.2
+            )
+        else:
+            self._pop_line.set_data(steps, total)
+
+        ax.set_xlim(0, max(steps[-1] + 10, 50))
+        ax.set_ylim(0, max(total) * 1.2 if total else 100)
+
+        agents = simulation.agents
+        if not agents:
+            return
+
+        sample = agents[0].policy
+        is_trait = isinstance(sample, TraitPolicy)
+        is_neural = isinstance(sample, (NeuralPolicy, StatefulNeuralPolicy))
+
+        panel_mode = "trait" if is_trait else "probe" if is_neural else "none"
+        if getattr(self, "_history_panel_mode", None) != panel_mode:
+            if self.ax_trait is not None:
+                self.ax_trait.cla()
+            self._trait_lines.clear()
+            self._probe_line = None
+            self._probe_ref_line = None
+            self._history_panel_mode = panel_mode
+
+        if is_trait:
+            if self.ax_trait is None:
+                self.ax_pop.set_position((0.06, 0.05, 0.40, 0.28))
+                self.ax_trait = self.fig.add_axes((0.55, 0.05, 0.40, 0.28))
+                self.ax_trait.set_facecolor("#111111")
+                self.ax_trait.tick_params(colors="#aaaaaa", labelsize=8)
+                for spine in self.ax_trait.spines.values():
+                    spine.set_edgecolor("#444444")
+                self.ax_trait.set_ylabel("Mean trait", color="#aaaaaa", fontsize=8)
+                self.ax_trait.set_title("Trait values", color="#dddddd", fontsize=9)
+                self.ax_trait.set_ylim(0, 1.1)
+            ax2 = self.ax_trait
+            rw_vals = simulation.history.get("mean_resource_weight", [])
+            cs_vals = simulation.history.get("mean_crowd_sensitivity", [])
+            noise_vals = simulation.history.get("mean_noise", [])
+            ea_vals = simulation.history.get("mean_energy_awareness", [])
+
+            trait_data = {
+                "rw": ("#ff4444", rw_vals),
+                "cs": ("#4488ff", cs_vals),
+                "noise": ("#44cc44", noise_vals),
+                "ea": ("#ffaa00", ea_vals),
+            }
+
+            if not self._trait_lines:
+                ax2.set_facecolor("#111111")
+                ax2.tick_params(colors="#aaaaaa", labelsize=8)
+                for spine in ax2.spines.values():
+                    spine.set_edgecolor("#444444")
+                ax2.set_ylabel("Mean trait", color="#aaaaaa", fontsize=8)
+                ax2.set_title("Trait values", color="#dddddd", fontsize=9)
+                ax2.set_ylim(0, 1.1)
+                for key, (color, vals) in trait_data.items():
+                    line, = ax2.plot(steps, vals, color=color, lw=1.0, label=key)
+                    self._trait_lines[key] = line
+                ax2.legend(
+                    facecolor="#222222", edgecolor="#555555",
+                    labelcolor="#dddddd", fontsize=7,
+                    loc="upper right"
+                )
+            else:
+                for key, (color, vals) in trait_data.items():
+                    if key in self._trait_lines and vals:
+                        self._trait_lines[key].set_data(steps, vals)
+
+            ax2.set_xlim(0, max(steps[-1] + 10, 50))
+        elif is_neural:
+            if self.ax_trait is None:
+                self.ax_pop.set_position((0.06, 0.05, 0.40, 0.28))
+                self.ax_trait = self.fig.add_axes((0.55, 0.05, 0.40, 0.28))
+
+            if simulation.current_step % 10 == 0:
+                spread = self._compute_probe_spread(simulation)
+                if spread is not None:
+                    self._probe_history.append(spread)
+                    self._probe_steps.append(simulation.current_step)
+
+            if not self._probe_history:
+                return
+
+            ax2 = self.ax_trait
+            if ax2 is None:
+                return
+
+            if self._probe_line is None:
+                ax2.cla()
+                ax2.set_facecolor("#111111")
+                ax2.tick_params(colors="#aaaaaa", labelsize=8)
+                for spine in ax2.spines.values():
+                    spine.set_edgecolor("#444444")
+                ax2.set_ylabel("Spread", color="#aaaaaa", fontsize=8)
+                ax2.set_title(
+                    "Directional sensitivity (probe spread)",
+                    color="#dddddd", fontsize=9
+                )
+                self._probe_ref_line = ax2.axhline(
+                    y=0.0, color="#e3b341", lw=1.0,
+                    linestyle="--", alpha=0.6,
+                    label="uniform baseline"
+                )
+                ax2.legend(
+                    facecolor="#222222", edgecolor="#555555",
+                    labelcolor="#dddddd", fontsize=7,
+                    loc="upper right"
+                )
+                self._probe_line, = ax2.plot(
+                    self._probe_steps,
+                    self._probe_history,
+                    color="#79c0ff", lw=1.2
+                )
+            else:
+                self._probe_line.set_data(
+                    self._probe_steps, self._probe_history
+                )
+
+            ax2.set_xlim(0, max(self._probe_steps[-1] + 10, 50))
+            ax2.set_ylim(0, max(max(self._probe_history) * 1.2, 0.1))
+        else:
+            if self.ax_trait is not None:
+                self.ax_trait.remove()
+                self.ax_trait = None
+                self._trait_lines.clear()
+            self.ax_pop.set_position((0.125, 0.11, 0.775, 0.28))
 
     # ── Main render ───────────────────────────────────────────────────────────
 
@@ -414,6 +614,7 @@ class Renderer:
             color="#eeeeee", fontsize=9,
         )
 
+        self._draw_history_panels(simulation)
         self.fig.canvas.draw_idle()
         plt.pause(0.01)
 
