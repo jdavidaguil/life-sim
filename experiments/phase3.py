@@ -22,6 +22,61 @@ from experiments.phase2 import (
 )
 import argparse
 
+from src.experiments.base import Experiment
+
+
+PHASE3_METRICS = [
+    "population_mean",
+    "population_std",
+    "rw_mean",
+    "rw_std",
+    "cs_mean",
+    "cs_std",
+    "noise_mean",
+    "noise_std",
+    "ea_mean",
+    "ea_std",
+    "agg_history",
+    "traits_final",
+]
+
+
+def build_phase3_experiment(
+    cond: Condition,
+    seeds: list[int],
+    steps: int,
+) -> Experiment:
+    """Build the explicit Phase 3 experiment configuration."""
+    return Experiment(
+        phase_overrides={"policy_mode": "richer"},
+        phase_additions={
+            "resource_gradient": True,
+            "local_density": True,
+            "relative_energy": True,
+        },
+        environment_config={
+            "drift_step": cond.drift_step,
+            "noise_rate": cond.noise_rate,
+            "noise_magnitude": cond.noise_magnitude,
+        },
+        metrics=list(PHASE3_METRICS),
+        seeds=list(seeds),
+        steps=steps,
+    )
+
+
+def run_phase3_experiment(
+    cond: Condition,
+    experiment: Experiment,
+) -> dict:
+    """Run a Phase 3 experiment via explicit config."""
+    return run_condition_multi_seed(
+        cond,
+        seeds=experiment.seeds,
+        steps=experiment.steps,
+        policy_mode=str(experiment.phase_overrides.get("policy_mode", "richer")),
+    )
+
 
 def print_comparison_table(
     phase2: dict,
@@ -265,13 +320,9 @@ def main() -> None:
 
     multi_results = []
     for cond in CONDITIONS:
+        experiment = build_phase3_experiment(cond, seeds=seeds, steps=args.steps)
         print(f"  Running {cond.name} across {len(seeds)} seeds...")
-        r = run_condition_multi_seed(
-            cond,
-            seeds=seeds,
-            steps=args.steps,
-            policy_mode="richer",
-        )
+        r = run_phase3_experiment(cond, experiment)
         multi_results.append((cond, r))
         print(
             f"    done — "

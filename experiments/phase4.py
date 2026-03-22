@@ -18,10 +18,56 @@ from pathlib import Path
 import numpy as np
 
 from src.core.simulation import Simulation
+from src.experiments.base import Experiment
 from experiments.phase2 import CONDITIONS, Condition, load_results
 
 
 RESULTS_DIR = Path(__file__).parent / "results"
+
+PHASE4_METRICS = [
+    "population_mean",
+    "population_std",
+    "mean_genome_norm_mean",
+    "mean_genome_norm_std",
+    "total_births_mean",
+    "total_births_std",
+    "history_total_mean",
+    "history_total_upper",
+    "history_total_lower",
+    "history_steps",
+]
+
+
+def build_phase4_experiment(
+    cond: Condition,
+    seeds: list[int],
+    steps: int,
+) -> Experiment:
+    """Build the explicit Phase 4 experiment configuration."""
+    return Experiment(
+        phase_overrides={"policy_mode": "neural"},
+        phase_additions={"neural_genome": True},
+        environment_config={
+            "drift_step": cond.drift_step,
+            "noise_rate": cond.noise_rate,
+            "noise_magnitude": cond.noise_magnitude,
+        },
+        metrics=list(PHASE4_METRICS),
+        seeds=list(seeds),
+        steps=steps,
+    )
+
+
+def run_phase4_experiment(
+    cond: Condition,
+    experiment: Experiment,
+) -> dict:
+    """Run a Phase 4 experiment via explicit config."""
+    return run_condition_neural_multi_seed(
+        cond,
+        seeds=experiment.seeds,
+        steps=experiment.steps,
+    )
 
 
 def run_condition_neural(
@@ -225,10 +271,9 @@ def main() -> None:
 
     results = []
     for cond in CONDITIONS:
+        experiment = build_phase4_experiment(cond, seeds=seeds, steps=args.steps)
         print(f"  Running {cond.name} across {len(seeds)} seeds...")
-        r = run_condition_neural_multi_seed(
-            cond, seeds=seeds, steps=args.steps
-        )
+        r = run_phase4_experiment(cond, experiment)
         results.append((cond, r))
         print(
             f"    done — "

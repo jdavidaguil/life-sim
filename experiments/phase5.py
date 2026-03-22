@@ -17,6 +17,7 @@ import numpy as np
 from src.core.simulation import Simulation
 from src.core.policy import StatefulNeuralPolicy
 from src.core.grid import Grid
+from src.experiments.base import Experiment
 from experiments.probe_phase4 import (
     PROBE_SITUATIONS, probe_population,
     plot_probe_results, DIR_LABELS,
@@ -27,6 +28,13 @@ from experiments.phase2 import CONDITIONS
 PHASE5_HOTSPOT_SIGMA: float = 3.0
 PHASE5_NUM_HOTSPOTS: int = 6
 
+PHASE5_METRICS = [
+    "population",
+    "genome_norm",
+    "state_vector_mean",
+    "state_vector_std",
+]
+
 
 def build_phase5_env_config(cond) -> dict:
     """Return the environment overrides used by the Phase 5 experiment."""
@@ -35,6 +43,41 @@ def build_phase5_env_config(cond) -> dict:
         "noise_rate": 0.0,
         "noise_magnitude": 0.0,
     }
+
+
+def build_phase5_experiment(
+    condition,
+    seed: int,
+    steps: int,
+) -> Experiment:
+    """Build the explicit Phase 5 experiment configuration."""
+    return Experiment(
+        phase_overrides={"policy_mode": "stateful"},
+        phase_additions={
+            "warm_start": True,
+            "internal_state": True,
+            "hotspot_sigma": PHASE5_HOTSPOT_SIGMA,
+            "num_hotspots": PHASE5_NUM_HOTSPOTS,
+        },
+        environment_config=build_phase5_env_config(condition),
+        metrics=list(PHASE5_METRICS),
+        seeds=[seed],
+        steps=steps,
+    )
+
+
+def run_phase5_experiment(
+    experiment: Experiment,
+    condition_key: str = "A",
+) -> tuple:
+    """Run Phase 5 through the explicit experiment interface."""
+    if not experiment.seeds:
+        raise ValueError("phase 5 experiment requires at least one seed")
+    return run_phase5(
+        seed=experiment.seeds[0],
+        steps=experiment.steps,
+        condition_key=condition_key,
+    )
 
 
 def warm_start_phase5_population(
@@ -165,11 +208,12 @@ def main() -> None:
     )
     print(f"Warm-start: True\n")
 
-    sim, cond = run_phase5(
+    experiment = build_phase5_experiment(
+        condition={c.name[0]: c for c in CONDITIONS}[args.condition],
         seed=args.seed,
         steps=args.steps,
-        condition_key=args.condition,
     )
+    sim, cond = run_phase5_experiment(experiment, condition_key=args.condition)
 
     probe_and_report(sim, cond.name)
 

@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.core.simulation import Simulation
+from src.experiments.base import Experiment
 
 
 @dataclass
@@ -27,6 +28,31 @@ class Condition:
 
 RESULTS_DIR = Path(__file__).parent / "results"
 
+PHASE1_METRICS = [
+    "population",
+    "rw",
+    "cs",
+    "noise",
+    "ea",
+    "std_rw",
+    "std_noise",
+]
+
+PHASE2_METRICS = [
+    "population_mean",
+    "population_std",
+    "rw_mean",
+    "rw_std",
+    "cs_mean",
+    "cs_std",
+    "noise_mean",
+    "noise_std",
+    "ea_mean",
+    "ea_std",
+    "agg_history",
+    "traits_final",
+]
+
 CONDITIONS: list[Condition] = [
     Condition("A — Baseline",         drift_step=1, noise_rate=3.0, noise_magnitude=2.0),
     Condition("B — Fast drift",       drift_step=3, noise_rate=3.0, noise_magnitude=2.0),
@@ -34,6 +60,61 @@ CONDITIONS: list[Condition] = [
     Condition("D — Combined",         drift_step=3, noise_rate=8.0, noise_magnitude=4.0),
     Condition("E — Steep landscape",  drift_step=1, noise_rate=0.5, noise_magnitude=1.0),
 ]
+
+
+def build_phase1_experiment(
+    seed: int,
+    steps: int,
+    condition: Condition | None = None,
+) -> Experiment:
+    """Build the explicit Phase 1 baseline configuration."""
+    cond = CONDITIONS[0] if condition is None else condition
+    return Experiment(
+        phase_overrides={"policy_mode": "baseline"},
+        phase_additions={},
+        environment_config={
+            "drift_step": cond.drift_step,
+            "noise_rate": cond.noise_rate,
+            "noise_magnitude": cond.noise_magnitude,
+        },
+        metrics=list(PHASE1_METRICS),
+        seeds=[seed],
+        steps=steps,
+    )
+
+
+def build_phase2_experiment(
+    cond: Condition,
+    seeds: list[int],
+    steps: int,
+    policy_mode: str = "baseline",
+) -> Experiment:
+    """Build the explicit Phase 2 experiment configuration."""
+    return Experiment(
+        phase_overrides={"policy_mode": policy_mode},
+        phase_additions={"environment_volatility": True},
+        environment_config={
+            "drift_step": cond.drift_step,
+            "noise_rate": cond.noise_rate,
+            "noise_magnitude": cond.noise_magnitude,
+        },
+        metrics=list(PHASE2_METRICS),
+        seeds=list(seeds),
+        steps=steps,
+    )
+
+
+def run_phase2_experiment(
+    cond: Condition,
+    experiment: Experiment,
+) -> dict:
+    """Run a Phase 2-style multi-seed experiment via explicit config."""
+    return run_condition_multi_seed(
+        cond,
+        seeds=experiment.seeds,
+        steps=experiment.steps,
+        policy_mode=str(experiment.phase_overrides.get("policy_mode", "baseline")),
+    )
 
 
 def run_condition(
@@ -387,8 +468,9 @@ def main() -> None:
 
     multi_results = []
     for cond in CONDITIONS:
+        experiment = build_phase2_experiment(cond, seeds=seeds, steps=args.steps)
         print(f"  Running {cond.name} across {len(seeds)} seeds...")
-        r = run_condition_multi_seed(cond, seeds=seeds, steps=args.steps)
+        r = run_phase2_experiment(cond, experiment)
         multi_results.append((cond, r))
         print(
             f"    done — "

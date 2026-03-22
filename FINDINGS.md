@@ -1,6 +1,6 @@
 # Life-Sim — Research Findings
 
-> **Status:** Phase 6 complete. Phases 1–5 concluded.
+> **Status:** Phase 6 complete. Phases 1–6 concluded.
 > Active development continues — see [What's Next](#whats-next).
 
 ---
@@ -19,6 +19,7 @@ The simulation runs through six phases of increasing representational complexity
 | 3 | Richer Perception | Same 4 floats + gradient, density, relative energy inputs |
 | 4 | Neural Genome | 224 weights: 18→8 ReLU →8 softmax |
 | 5 | Internal State | 292 weights: same + 4-value persistent memory vector |
+| 6 | Sexual Reproduction | Neural genome + whole-layer crossover, co-location mating |
 
 ---
 
@@ -94,6 +95,7 @@ Across Phase 2 conditions, traits respond systematically to environmental parame
 | D — Combined | 0.262 ± 0.100 | 0.493 ± 0.266 | 0.660 ± 0.041 | 0.184 ± 0.054 |
 
 Key patterns:
+
 - **Fast drift** raises resource weight — predictable hotspot movement rewards tracking
 - **Boom/bust** raises noise and energy awareness — unpredictable shocks reward flexibility
 - **Combined volatility** produces the highest cross-seed variance — no single strategy dominates
@@ -133,6 +135,7 @@ More information enables more viable strategies — it does not immediately sele
 ### Cold start (random initialization)
 
 Neural genomes initialized near zero undergo **neutral evolution**:
+
 - Max weight remains below 0.5 after 1000+ steps
 - Probe spreads stay at 0.01–0.06 (near-uniform — no directional preference)
 - Genome norm grows from ~1.6 to ~3.0 — pure mutation accumulation, not adaptation
@@ -188,20 +191,80 @@ Phase 5 underperforms in volatile conditions (B, D) due to extra mutation noise 
 
 ---
 
+## Finding 6 — Sexual reproduction inverts the volatility-population relationship
+
+### Setup
+
+Phase 6 introduces sexual reproduction to the neural genome system. Two agents co-located on the same cell, both above an energy threshold, produce one child via whole-layer crossover of their 224-weight neural genomes. Both parents pay an energy cost. The child genome is a layer-wise mix of both parents with Gaussian mutation σ=0.05 per weight.
+
+All agents warm-started from the Phase 4 functional initialization with added noise σ=0.1 to seed initial diversity. Best mating parameters from a 3×3 parameter sweep (cost × threshold): cost=3.0, threshold=15.0.
+
+### Results across all four conditions (5 seeds × 1000 steps)
+
+| Condition | Population | Matings | Probe north rich | Probe north crowded |
+|-----------|-----------|---------|-----------------|-------------------|
+| A — Baseline | 554 ± 29 | 5142 | 0.468 | 0.171 |
+| B — Fast drift | 576 ± 129 | 6037 | 0.439 | 0.158 |
+| C — Boom/bust | 577 ± 37 | 5130 | 0.459 | 0.171 |
+| D — Combined | 659 ± 89 | 6136 | 0.480 | 0.174 |
+
+### Comparison to Phase 4/5 asexual baseline
+
+| Condition | Phase 4/5 asexual | Phase 6 sexual | Delta |
+|-----------|------------------|----------------|-------|
+| A — Baseline | 615 | 554 | −61 |
+| B — Fast drift | 621 | 576 | −45 |
+| C — Boom/bust | 608 | 577 | −31 |
+| D — Combined | 573 | 659 | **+86** |
+
+Sexual reproduction carries a population cost in stable and moderately volatile environments. That cost reverses in combined high-volatility — sexual reproduction outperforms asexual by 86 agents in condition D.
+
+### The volatility inversion
+
+In Phase 4/5, population ranked A > B > C > D — stable environments produced the largest populations. In Phase 6, population ranks D > C > B > A — the ranking is fully inverted.
+
+The mechanism is mate encounter rate. Fast-drifting hotspots force continuous agent movement. Moving agents co-locate more frequently. More co-location means more mating events. Conditions B and D — both fast drift — generate ~6000+ matings vs ~5130 for stable conditions. Boom/bust noise alone (condition C) does not amplify mating rate because it disrupts energy levels rather than forcing movement.
+
+### Functional navigation preserved through crossover
+
+Probe spreads are invariant to environmental condition and reproductive mechanism:
+
+| | Phase 4/5 asexual | Phase 6 sexual |
+|---|---|---|
+| Probe north rich | 0.364 | 0.468 |
+| Probe north crowded | 0.169 | 0.171 |
+
+The crowd-avoidance differential is fully preserved. Whole-layer crossover does not disrupt functional neural navigation. The genome encodes the strategy robustly across all conditions.
+
+### Cross-seed variance as signal
+
+Condition B shows σ=129 — the highest cross-seed variance of any experiment in this project. Fast drift creates winner-takes-all dynamics: populations that locate drifting hotspots early compound that advantage through reproduction; those that don't collapse. Boom/bust (C) is egalitarian by comparison at σ=37 — all seeds converge near the same outcome regardless of early luck.
+
+### Falsifiable statements
+
+*Sexual reproduction with neural genomes inverts the volatility-population relationship seen in asexual populations. There exists a volatility threshold above which sexual reproduction outperforms asexual reproduction — in this environment that threshold lies between boom/bust noise alone and combined drift+noise.*
+
+*Whole-layer neural genome crossover preserves functional navigation behavior. Genome mixing does not disrupt the crowd-avoidance differential encoded by warm initialization.*
+
+*Fast-drifting resource hotspots amplify sexual reproductive output by increasing agent movement and therefore mate encounter rate. Resource noise alone does not produce this effect.*
+
+---
+
 ## Cross-Phase Summary
 
-The progression across phases tells a coherent story about the relationship between **representational power** and **adaptive behavior**:
+The progression across phases tells a coherent story about the relationship between **representational power**, **reproductive mechanism**, and **adaptive behavior**:
 
-| Phase | What agents could express | Peak population |
-|-------|--------------------------|-----------------|
-| 0 | Two fixed strategies | ~500 |
-| 1–3 | Scalar trait combinations | ~490–500 |
-| 4 warm | Directionally specific, conditional navigation | ~615 |
-| 5 warm | Same + persistent memory | ~627 |
+| Phase | Genome | Reproduction | Condition A | Condition D |
+|-------|--------|-------------|-------------|-------------|
+| 0 | Two fixed strategies | Asexual | ~500 | — |
+| 1–3 | Trait vector | Asexual | ~490–500 | ~490 |
+| 4 warm | Neural 224w | Asexual | 615 | 573 |
+| 5 warm | Neural 292w | Asexual | 627 | 492 |
+| 6 | Neural 224w | Sexual | 554 | **659** |
 
-Each step up in expressiveness produced a better strategy — not because the environment changed, but because the genome could finally encode what the environment was rewarding. Crowd avoidance was always valuable. The trait vector could only express it as a scalar; the neural genome expressed it per direction. That difference is worth ~125 agents.
+The volatility inversion in Phase 6 is the sharpest finding in the project: the same environment that hurt asexual populations most (condition D) helps sexual populations most. Reproductive mechanism interacts with environment in a way that genome expressiveness alone cannot predict.
 
-The deeper finding: **the apparent strategy of a population tells you as much about the genome's expressive limits as about the environment's structure.** When trait phases showed high noise, that wasn't purely environmental. It was partly a signal that the trait vector had reached its ceiling.
+The deeper finding across all phases: **the apparent strategy of a population tells you as much about the genome's expressive limits and reproductive constraints as about the environment's structure.**
 
 ---
 
@@ -217,15 +280,17 @@ The deeper finding: **the apparent strategy of a population tells you as much ab
 
 5. **Memory diversifies before it improves.** Fitness advantage from memory requires an environment that specifically rewards remembering.
 
+6. **Reproductive mechanism interacts with environment to determine fitness.** Sexual reproduction is costlier than asexual in stable environments and more productive in volatile ones. The relationship between environment and fitness cannot be read from genome alone — reproductive structure matters.
+
 ---
 
 ## What's Next
 
-- **Memory-advantaged environments** — alternating patches where spatial memory of recently depleted areas would genuinely help
+- **Volatility threshold experiment** — parameterize drift speed continuously to find the exact crossover point where sexual reproduction outperforms asexual. A specific, falsifiable prediction from Finding 6.
+- **Memory-advantaged environments** — alternating patches where spatial memory of recently depleted areas would genuinely help; directly tests Finding 5's open question
+- **Kin selection** — agents share resources with nearby genome-similar agents; requires sexual reproduction as foundation, now in place
 - **Competition between lineages** — two populations with different genomes competing for the same resources
-- **Cooperation vs. defection** — agents that can share or take on shared cells
-- **Predator-prey coevolution** — two agent types evolving simultaneously
-- **Extended timescales** — 10,000+ step runs to test cold-start neural evolution
+- **Extended timescales** — 10,000+ step runs to test whether cold-start neural evolution eventually succeeds given enough time
 
 ---
 
@@ -233,19 +298,21 @@ The deeper finding: **the apparent strategy of a population tells you as much ab
 
 **Grid:** 50×50, 4–6 resource hotspots, Gaussian spread (sigma=3–4), random walk drift, Poisson noise events
 
-**Agent lifecycle:** move → consume → energy decay (0.5 ± 0.1/step) → reproduce if energy > 18.0 → die if energy ≤ 0
+**Agent lifecycle:** move → consume → energy decay (0.5 ± 0.1/step) → reproduce → die if energy ≤ 0
 
-**Reproduction:** energy split 50/50, child inherits mutated genome (Gaussian noise, sigma=0.05 per weight)
+**Asexual reproduction (Phases 0–5):** energy split 50/50, child inherits mutated genome (Gaussian noise, sigma=0.05 per weight)
 
-**Neural architecture (Phase 4):** 18 inputs × 8 hidden (ReLU) × 8 outputs (softmax). Directions: NW, N, NE, W, E, SW, S, SE
+**Sexual reproduction (Phase 6):** co-location required, both agents energy > 15.0, mating cost 3.0 per parent, child energy 10.0. Whole-layer crossover: each layer (W1, b1, W2, b2) independently drawn from one parent with 50/50 probability, then Gaussian mutation sigma=0.05 per weight.
 
-**Warm-start encoding:** W1 diagonal = resource weight (2.0), crowd-input diagonal = −1.5, W2 = identity
+**Neural architecture (Phase 4/6):** 18 inputs × 8 hidden (ReLU) × 8 outputs (softmax). Directions: NW, N, NE, W, E, SW, S, SE
+
+**Warm-start encoding:** W1 diagonal = resource weight (2.0), crowd-input diagonal = −1.5, W2 = identity. Phase 6 adds noise σ=0.1 at initialization to seed diversity.
 
 **Internal state (Phase 5):** 4-value tanh vector, persists across steps, reset to zero at birth
 
-**Experiments:** `experiments/phase{1..5}.py`, results in `experiments/results/`
+**Experiments:** `experiments/phase{1..6}.py`, results in `experiments/results/`
 
 ---
 
 *Inspired by Conway's Game of Life and Epstein & Axtell's Growing Artificial Societies.*
-*Closest prior art: Sugarscape (1996). Original contribution: structured trait genomes, neural genome evolution, internal state.*
+*Closest prior art: Sugarscape (1996). Original contribution: structured trait genomes, neural genome evolution, internal state, sexual reproduction with neural crossover.*

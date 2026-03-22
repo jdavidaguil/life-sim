@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import collections
 from typing import List, Optional
 
 import numpy as np
@@ -10,14 +9,9 @@ import numpy as np
 from src.core.grid import Grid
 from src.core.agent import Agent
 from src.core.policy import TraitPolicy, NeuralPolicy, StatefulNeuralPolicy
-
-# Energy threshold above which an agent reproduces.
-REPRODUCTION_THRESHOLD: float = 18.0
-
-# Overcrowding: agents beyond this count on one cell each pay an extra decay.
-OVERCROWD_THRESHOLD: int = 3
-# Extra energy drained per agent above the threshold per step.
-OVERCROWD_PENALTY: float = 0.15
+from src.core.state import SimState
+from src.core.loop import SimulationLoop
+from src.core.phases import DEFAULT_PHASES
 
 
 class Simulation:
@@ -41,6 +35,7 @@ class Simulation:
         seed: Optional[int] = None,
         env_config: dict | None = None,
         policy_mode: str = "baseline",
+        phases: list | None = None,
     ) -> None:
         """Set up the simulation and place agents at random grid positions.
 
@@ -52,6 +47,7 @@ class Simulation:
             env_config: Optional dict of environment overrides (drift_step,
                 noise_rate, noise_magnitude).
             policy_mode: Movement scorer to use for all agents (`baseline`, `richer`, or `neural`).
+            phases: Optional custom phase list.  Defaults to ``DEFAULT_PHASES``.
         """
         self.width = width
         self.height = height
@@ -68,6 +64,8 @@ class Simulation:
         self._next_id: int = initial_agents
 
         self.agents: List[Agent] = []
+        self._state: SimState
+        self._loop: SimulationLoop
         for i in range(initial_agents):
             agent = Agent(
                 id=i,
@@ -82,6 +80,15 @@ class Simulation:
                 ),
             )
             self.agents.append(agent)
+
+        self._state = SimState(
+            grid=self.grid,
+            agents=self.agents,
+            rng=self.rng,
+            step=0,
+            metrics={"_next_id": self._next_id},
+        )
+        self._loop = SimulationLoop(phases if phases is not None else DEFAULT_PHASES)
 
         # Per-step population history: lists grow by one entry per step.
         self.history: dict[str, List] = {
@@ -102,106 +109,22 @@ class Simulation:
         }
 
     def step(self) -> None:
-        """Advance the simulation by one time step.
+        """Advance the simulation by one time step via the phase-based loop.
 
-        The step runs in three phases to handle resource competition:
-
-        1. **Move** – every agent scores its Moore neighbours by
-           ``resource - crowding_penalty`` and moves to the best cell (85%),
-           or to a random neighbour (15%) to avoid lock-in.
-        2. **Compete** – agents sharing a cell pool their desired consumption
-           amounts.  The cell supplies as much as it can; each agent receives
-           a share proportional to what it wanted.
-        3. **Update** – energy decay (``0.5 ± 0.1`` plus an overcrowding
-           penalty for cells above ``OVERCROWD_THRESHOLD``) is applied, dead
-           agents are dropped, and agents above ``REPRODUCTION_THRESHOLD``
-           reproduce.
+        Delegates to :class:`~src.core.loop.SimulationLoop` which runs the
+        eight phases in order: move → consume → decay → reproduce → die →
+        regenerate → noise → drift.  After the loop returns, this method
+        syncs ``current_step``, ``agents``, and ``reproductions_total`` from
+        the shared :class:`~src.core.state.SimState`, then records history.
         """
-        # ── Phase 1: move all agents, record desired consumption ──────────────
-        # Pre-compute current occupancy so movement can avoid crowded cells.
-        occupancy: dict[tuple[int, int], int] = collections.defaultdict(int)
-        for agent in self.agents:
-            occupancy[(agent.x, agent.y)] += 1
-
-        # Compute population mean energy once for richer perception.
-        pop_mean_energy: float = (
-            sum(a.energy for a in self.agents) / len(self.agents)
-            if self.agents else 0.0
+        self._loop.run(self._state, steps=1)
+        self.current_step = self._state.step
+        self.agents = self._state.agents
+        reproductions_this_step: int = self._state.scratch.get(
+            "reproductions_this_step",
+            self._state.scratch.get("mating_events", 0),
         )
-
-        desired: List[float] = []
-        for agent in self.agents:
-            neighbors = self.grid.get_neighbors(agent.x, agent.y)
-            if neighbors:
-                dx, dy = agent.policy.decide(
-                    agent, self.grid, occupancy, self.rng,
-                    pop_mean_energy=pop_mean_energy,
-                )
-                agent.move(dx, dy)
-                agent.last_dx, agent.last_dy = dx, dy
-            desired.append(float(self.rng.uniform(0.5, 1.5)))
-
-        # ── Phase 2: split resources per cell ────────────────────────────────
-        # Group agent indices by their current position.
-        cell_groups: dict[tuple[int, int], List[int]] = collections.defaultdict(list)
-        for i, agent in enumerate(self.agents):
-            cell_groups[(agent.x, agent.y)].append(i)
-
-        gains: List[float] = [0.0] * len(self.agents)
-        crowding_penalties: List[float] = [0.0] * len(self.agents)
-        for (x, y), indices in cell_groups.items():
-            total_desired = sum(desired[i] for i in indices)
-            actual = self.grid.consume_resource(x, y, total_desired)
-            # Distribute actual gain proportionally to each agent's desire.
-            if total_desired > 0:
-                for i in indices:
-                    gains[i] = actual * (desired[i] / total_desired)
-            # Overcrowding penalty: every agent above the threshold pays extra.
-            excess = max(0, len(indices) - OVERCROWD_THRESHOLD)
-            if excess > 0:
-                for i in indices:
-                    crowding_penalties[i] = excess * OVERCROWD_PENALTY
-
-        # ── Phase 3: apply energy, reproduction, death ───────────────────────
-        survivors: List[Agent] = []
-        newborns: List[Agent] = []
-        reproductions_this_step: int = 0
-
-        for i, agent in enumerate(self.agents):
-            agent.energy += gains[i]
-            energy_decay = 0.5 + float(self.rng.uniform(-0.1, 0.1)) + crowding_penalties[i]
-            agent.energy -= energy_decay
-
-            if agent.energy <= 0:
-                continue  # agent dies
-
-            # Reproduction: split energy when above threshold.
-            if agent.energy > REPRODUCTION_THRESHOLD:
-                child_energy = agent.energy / 2.0
-                agent.energy = child_energy
-                child = Agent(id=self._next_id, x=agent.x, y=agent.y,
-                             policy=agent.policy.mutate(self.rng))
-                child.energy = child_energy
-                self._next_id += 1
-                newborns.append(child)
-                reproductions_this_step += 1
-
-            survivors.append(agent)
-
-        self.agents = survivors + newborns
         self.reproductions_total += reproductions_this_step
-
-        # Build a pressure map from post-move occupancy so heavily grazed cells
-        # regenerate more slowly (rate / (1 + num_agents)).
-        pressure = np.zeros((self.height, self.width), dtype=np.float32)
-        for (x, y), indices in cell_groups.items():
-            pressure[y, x] = len(indices)
-        self.grid.regenerate(pressure)
-        # Random resource shocks: sudden local windfalls or depletions.
-        self.grid.apply_noise()
-        # Advance hotspot random walk every step for continuous slow drift.
-        self.grid.update_hotspots()
-        self.current_step += 1
 
         self.history["step"].append(self.current_step)
         self.history["total"].append(self.agent_count())
