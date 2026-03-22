@@ -46,9 +46,9 @@ class Grid:
         width: int,
         height: int,
         rng: Optional[np.random.Generator] = None,
-        drift_step: int = None,
-        noise_rate: float = None,
-        noise_magnitude: float = None,
+        drift_step: Optional[int] = None,
+        noise_rate: Optional[float] = None,
+        noise_magnitude: Optional[float] = None,
     ) -> None:
         """Initialise the grid, place hotspots, and fill resources accordingly.
 

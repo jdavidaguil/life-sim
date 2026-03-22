@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.colorbar
 import numpy as np
+from matplotlib.image import AxesImage
 
 from src.core.agent import Agent
 from src.core.simulation import Simulation
@@ -38,6 +39,7 @@ class Renderer:
         p — pause / resume
         q — quit
         e — toggle agent panel between trait colors and energy heatmap
+        m — restart with the next policy preset
     """
 
     SHOCK_FLASH_STEPS: int = 3   # how many steps a shock highlight persists
@@ -76,8 +78,8 @@ class Renderer:
         # Shock flash tracker: dict of (x,y) -> steps_remaining
         self._shock_cells: dict[tuple[int,int], int] = {}
 
-        self.im_agents: plt.AxesImage | None = None
-        self.im_res:    plt.AxesImage | None = None
+        self.im_agents: AxesImage | None = None
+        self.im_res:    AxesImage | None = None
         self._bar_container = None
         self._hotspot_scatter = None
         self._shock_scatter   = None
@@ -146,6 +148,20 @@ class Renderer:
         frame[mask] /= counts[mask]
         return np.clip(frame, 0.0, 1.0)
 
+    def _build_stateful_frame(self, simulation: Simulation) -> np.ndarray:
+        """RGB frame showing the first three state channels per occupied cell."""
+        h, w = simulation.height, simulation.width
+        frame = np.zeros((h, w, 3), dtype=np.float32)
+        counts = np.zeros((h, w), dtype=np.float32)
+        for agent in simulation.agents:
+            rgb_state = np.clip(agent.policy.state[:3], -1.0, 1.0)
+            frame[agent.y, agent.x] += (rgb_state + 1.0) / 2.0
+            counts[agent.y, agent.x] += 1
+        mask = counts > 0
+        for channel in range(3):
+            frame[:, :, channel][mask] /= counts[mask]
+        return np.clip(frame, 0.0, 1.0)
+
     def _blend_history(self) -> np.ndarray:
         ref        = self._history[-1]
         compatible = [f for f in self._history if f.shape == ref.shape]
@@ -171,6 +187,11 @@ class Renderer:
             panel_kind = "energy"
             cmap = "plasma"
             title = "Agents — energy"
+        elif mode_str == "stateful":
+            current_frame = self._build_stateful_frame(simulation)
+            panel_kind = "stateful"
+            cmap = None
+            title = "Agents — Phase 5 state (R=s0 G=s1 B=s2)"
         elif mode_str == "neural":
             current_frame = self._build_neural_frame(simulation)
             panel_kind = "neural"
@@ -252,7 +273,7 @@ class Renderer:
             )
 
         # ── Trait bar chart ───────────────────────────────────────────────
-        if simulation.agents and mode_str != "neural":
+        if simulation.agents and mode_str not in {"neural", "stateful"}:
             traits = np.array(
                 [a.policy.traits for a in simulation.agents],
                 dtype=np.float32,
@@ -298,6 +319,59 @@ class Renderer:
                     f"{mean_norm:.2f}",
                     va="center", ha="left",
                     color="#aaaaaa", fontsize=8,
+                )
+        elif mode_str == "stateful":
+            if simulation.agents:
+                states = np.array(
+                    [a.policy.state for a in simulation.agents],
+                    dtype=np.float32,
+                )
+                state_means = states.mean(axis=0)
+                state_stds = states.std(axis=0)
+                genome_norm = float(np.mean([
+                    float(np.linalg.norm(a.policy.genome))
+                    for a in simulation.agents
+                ]))
+            else:
+                state_means = np.zeros(4, dtype=np.float32)
+                state_stds = np.zeros(4, dtype=np.float32)
+                genome_norm = 0.0
+
+            labels = ["s0", "s1", "s2", "s3"]
+            colors = ["#ff6b6b", "#4ecdc4", "#ffe66d", "#5c7cfa"]
+            y_pos = np.arange(4)
+            bars = self.ax_traits.barh(
+                y_pos,
+                state_means,
+                color=colors,
+                xerr=state_stds,
+                error_kw=dict(ecolor="#555555", capsize=3),
+                height=0.6,
+            )
+            self.ax_traits.set_xlim(-1.0, 1.0)
+            self.ax_traits.set_yticks(y_pos)
+            self.ax_traits.set_yticklabels(
+                labels,
+                color="#aaaaaa",
+                fontsize=9,
+            )
+            self.ax_traits.set_title(
+                f"State means | gnorm={genome_norm:.2f}",
+                color="#dddddd",
+                fontsize=9,
+            )
+            self.ax_traits.axvline(x=0.0, color="#333333", lw=0.8, linestyle="--")
+            for bar, mean in zip(bars, state_means):
+                x_text = mean + 0.06 if mean >= 0 else mean - 0.06
+                x_text = float(min(max(x_text, -0.92), 0.92))
+                self.ax_traits.text(
+                    x_text,
+                    bar.get_y() + bar.get_height() / 2,
+                    f"{mean:.2f}",
+                    va="center",
+                    ha="left" if mean >= 0 else "right",
+                    color="#aaaaaa",
+                    fontsize=8,
                 )
         else:
             y_pos = np.arange(4)

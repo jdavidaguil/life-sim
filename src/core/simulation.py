@@ -95,6 +95,10 @@ class Simulation:
             "std_crowd_sensitivity": [],
             "std_noise": [],
             "std_energy_awareness": [],
+            "mean_genome_norm": [],
+            "std_genome_norm": [],
+            "mean_state_norm": [],
+            "std_state_norm": [],
         }
 
     def step(self) -> None:
@@ -206,6 +210,8 @@ class Simulation:
         neural_agents = [a for a in self.agents
                          if isinstance(a.policy,
                             (NeuralPolicy, StatefulNeuralPolicy))]
+        stateful_agents = [a for a in self.agents
+                           if isinstance(a.policy, StatefulNeuralPolicy)]
         if trait_agents:
             traits = np.array(
                 [a.policy.traits for a in trait_agents],
@@ -225,6 +231,28 @@ class Simulation:
                         "std_resource_weight", "std_crowd_sensitivity",
                         "std_noise", "std_energy_awareness"]:
                 self.history[key].append(0.0)
+
+        if neural_agents:
+            genome_norms = np.array(
+                [float(np.linalg.norm(a.policy.genome)) for a in neural_agents],
+                dtype=np.float32,
+            )
+            self.history["mean_genome_norm"].append(float(genome_norms.mean()))
+            self.history["std_genome_norm"].append(float(genome_norms.std()))
+        else:
+            self.history["mean_genome_norm"].append(0.0)
+            self.history["std_genome_norm"].append(0.0)
+
+        if stateful_agents:
+            state_norms = np.array(
+                [float(np.linalg.norm(a.policy.state)) for a in stateful_agents],
+                dtype=np.float32,
+            )
+            self.history["mean_state_norm"].append(float(state_norms.mean()))
+            self.history["std_state_norm"].append(float(state_norms.std()))
+        else:
+            self.history["mean_state_norm"].append(0.0)
+            self.history["std_state_norm"].append(0.0)
 
         if self.current_step % 10 == 0:
             print(
@@ -281,7 +309,7 @@ class Simulation:
         fig, axes = plt.subplots(3, 1, figsize=(10, 9), sharex=True)
         fig.patch.set_facecolor("#111111")
 
-        def _style(ax: plt.Axes, ylabel: str, title: str) -> None:
+        def _style(ax, ylabel: str, title: str) -> None:
             ax.set_facecolor("#111111")
             ax.set_ylabel(ylabel, color="#aaaaaa")
             ax.set_title(title, color="#dddddd", fontsize=10)
@@ -298,19 +326,57 @@ class Simulation:
 
         # Panel 2: mean of each trait over time
         ax1 = axes[1]
-        ax1.plot(steps, self.history["mean_resource_weight"],   color="#ff4444", lw=1.2, label="rw")
-        ax1.plot(steps, self.history["mean_crowd_sensitivity"], color="#4488ff", lw=1.2, label="cs")
-        ax1.plot(steps, self.history["mean_noise"],             color="#44cc44", lw=1.2, label="noise")
-        ax1.plot(steps, self.history["mean_energy_awareness"],  color="#ffaa00", lw=1.2, label="ea")
-        _style(ax1, "Mean trait", "Mean trait values over time")
+        if self.history["mean_genome_norm"][-1] > 0:
+            ax1.plot(
+                steps,
+                self.history["mean_genome_norm"],
+                color="#c77dca",
+                lw=1.5,
+                label="genome norm",
+            )
+            _style(ax1, "Mean norm", "Neural genome norm over time")
+        else:
+            ax1.plot(steps, self.history["mean_resource_weight"],   color="#ff4444", lw=1.2, label="rw")
+            ax1.plot(steps, self.history["mean_crowd_sensitivity"], color="#4488ff", lw=1.2, label="cs")
+            ax1.plot(steps, self.history["mean_noise"],             color="#44cc44", lw=1.2, label="noise")
+            ax1.plot(steps, self.history["mean_energy_awareness"],  color="#ffaa00", lw=1.2, label="ea")
+            _style(ax1, "Mean trait", "Mean trait values over time")
 
         # Panel 3: std of each trait over time
         ax2 = axes[2]
-        ax2.plot(steps, self.history["std_resource_weight"],   color="#ff4444", lw=1.0, alpha=0.8, label="rw")
-        ax2.plot(steps, self.history["std_crowd_sensitivity"], color="#4488ff", lw=1.0, alpha=0.8, label="cs")
-        ax2.plot(steps, self.history["std_noise"],             color="#44cc44", lw=1.0, alpha=0.8, label="noise")
-        ax2.plot(steps, self.history["std_energy_awareness"],  color="#ffaa00", lw=1.0, alpha=0.8, label="ea")
-        _style(ax2, "Std trait", "Trait diversity (std) over time")
+        if self.history["mean_state_norm"][-1] > 0:
+            ax2.plot(
+                steps,
+                self.history["mean_state_norm"],
+                color="#4ecdc4",
+                lw=1.5,
+                label="state norm",
+            )
+            ax2.plot(
+                steps,
+                self.history["std_state_norm"],
+                color="#ffe66d",
+                lw=1.0,
+                alpha=0.9,
+                label="state std",
+            )
+            _style(ax2, "State", "Internal state dynamics over time")
+        elif self.history["mean_genome_norm"][-1] > 0:
+            ax2.plot(
+                steps,
+                self.history["std_genome_norm"],
+                color="#c77dca",
+                lw=1.2,
+                alpha=0.9,
+                label="genome std",
+            )
+            _style(ax2, "Std norm", "Genome diversity over time")
+        else:
+            ax2.plot(steps, self.history["std_resource_weight"],   color="#ff4444", lw=1.0, alpha=0.8, label="rw")
+            ax2.plot(steps, self.history["std_crowd_sensitivity"], color="#4488ff", lw=1.0, alpha=0.8, label="cs")
+            ax2.plot(steps, self.history["std_noise"],             color="#44cc44", lw=1.0, alpha=0.8, label="noise")
+            ax2.plot(steps, self.history["std_energy_awareness"],  color="#ffaa00", lw=1.0, alpha=0.8, label="ea")
+            _style(ax2, "Std trait", "Trait diversity (std) over time")
         ax2.set_xlabel("Step", color="#aaaaaa")
 
         fig.tight_layout()

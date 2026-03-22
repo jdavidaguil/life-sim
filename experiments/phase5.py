@@ -24,6 +24,64 @@ from experiments.probe_phase4 import (
 from experiments.phase2 import CONDITIONS
 
 
+PHASE5_HOTSPOT_SIGMA: float = 3.0
+PHASE5_NUM_HOTSPOTS: int = 6
+
+
+def build_phase5_env_config(cond) -> dict:
+    """Return the environment overrides used by the Phase 5 experiment."""
+    return {
+        "drift_step": cond.drift_step,
+        "noise_rate": 0.0,
+        "noise_magnitude": 0.0,
+    }
+
+
+def warm_start_phase5_population(
+    sim: Simulation,
+    seed: int | None,
+) -> None:
+    """Replace the default policies with Phase 5 warm-started stateful ones."""
+    rng_ws = np.random.default_rng(seed) if seed is not None else sim.rng
+    for agent in sim.agents:
+        agent.policy = StatefulNeuralPolicy(
+            rng=rng_ws,
+            warm_start=True,
+        )
+
+
+def create_phase5_simulation(
+    seed: int | None,
+    condition,
+    width: int = 50,
+    height: int = 50,
+    initial_agents: int = 100,
+) -> Simulation:
+    """Create a simulation configured exactly like the Phase 5 experiment."""
+    original_sigma = Grid.HOTSPOT_SIGMA
+    original_n = Grid.NUM_HOTSPOTS
+    Grid.HOTSPOT_SIGMA = PHASE5_HOTSPOT_SIGMA
+    Grid.NUM_HOTSPOTS = PHASE5_NUM_HOTSPOTS
+
+    try:
+        sim = Simulation(
+            width=width,
+            height=height,
+            initial_agents=initial_agents,
+            seed=seed,
+            env_config=build_phase5_env_config(condition),
+            policy_mode="stateful",
+        )
+    finally:
+        Grid.HOTSPOT_SIGMA = original_sigma
+        Grid.NUM_HOTSPOTS = original_n
+
+    sim.grid.HOTSPOT_SIGMA = PHASE5_HOTSPOT_SIGMA
+    sim.grid.NUM_HOTSPOTS = PHASE5_NUM_HOTSPOTS
+    warm_start_phase5_population(sim, seed=seed)
+    return sim
+
+
 def run_phase5(
     seed: int,
     steps: int,
@@ -33,39 +91,11 @@ def run_phase5(
     cond_map = {c.name[0]: c for c in CONDITIONS}
     cond = cond_map[condition_key]
 
-    original_sigma = Grid.HOTSPOT_SIGMA
-    original_n     = Grid.NUM_HOTSPOTS
-    Grid.HOTSPOT_SIGMA = 3.0
-    Grid.NUM_HOTSPOTS  = 6
+    sim = create_phase5_simulation(seed=seed, condition=cond)
+    for _ in range(steps):
+        sim.step()
 
-    try:
-        sim = Simulation(
-            width=50, height=50,
-            initial_agents=100,
-            seed=seed,
-            env_config={
-                "drift_step":      cond.drift_step,
-                "noise_rate":      0.0,
-                "noise_magnitude": 0.0,
-            },
-            policy_mode="stateful",
-        )
-
-        # Warm-start all agents from Phase 4 solution
-        rng_ws = np.random.default_rng(seed)
-        for agent in sim.agents:
-            agent.policy = StatefulNeuralPolicy(
-                rng=rng_ws, warm_start=True
-            )
-
-        for _ in range(steps):
-            sim.step()
-
-        return sim, cond
-
-    finally:
-        Grid.HOTSPOT_SIGMA = original_sigma
-        Grid.NUM_HOTSPOTS  = original_n
+    return sim, cond
 
 
 def probe_and_report(sim, cond_name: str) -> None:
@@ -129,7 +159,10 @@ def main() -> None:
     print(f"Phase 5 — Internal State")
     print(f"Seed: {args.seed}  Steps: {args.steps}  "
           f"Condition: {args.condition}")
-    print(f"HOTSPOT_SIGMA=3.0  NUM_HOTSPOTS=6  noise=0")
+    print(
+        f"HOTSPOT_SIGMA={PHASE5_HOTSPOT_SIGMA}  "
+        f"NUM_HOTSPOTS={PHASE5_NUM_HOTSPOTS}  noise=0"
+    )
     print(f"Warm-start: True\n")
 
     sim, cond = run_phase5(

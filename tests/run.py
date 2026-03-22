@@ -11,8 +11,9 @@ import argparse
 from src.core.simulation import Simulation
 from src.viz.renderer import Renderer
 from experiments.phase2 import CONDITIONS
+from experiments.phase5 import create_phase5_simulation
 
-POLICY_MODES = ["baseline", "richer", "neural"]
+POLICY_MODES = ["baseline", "richer", "neural", "phase5"]
 
 
 def main() -> None:
@@ -36,13 +37,13 @@ def main() -> None:
     parser.add_argument(
         "--policy-mode", type=str, default="baseline",
         choices=POLICY_MODES,
-        help="Initial policy mode: baseline, richer, or neural (default: baseline)"
+        help="Initial policy mode: baseline, richer, neural, or phase5 (default: baseline)"
     )
     args = parser.parse_args()
 
     # Resolve environment config from condition label
     cond_map = {c.name[0]: c for c in CONDITIONS}
-    cond = cond_map.get(args.condition or "A")
+    cond = cond_map[args.condition or "A"]
     env_config = {
         "drift_step":      cond.drift_step,
         "noise_rate":      cond.noise_rate,
@@ -51,7 +52,17 @@ def main() -> None:
 
     current_mode = [args.policy_mode]
 
+    def current_condition_label() -> str:
+        if current_mode[0] == "phase5":
+            return f"{cond.name} | Phase 5 preset"
+        return cond.name
+
     def make_sim():
+        if current_mode[0] == "phase5":
+            return create_phase5_simulation(
+                seed=args.seed,
+                condition=cond,
+            )
         return Simulation(
             width=50, height=50,
             initial_agents=100,
@@ -64,10 +75,11 @@ def main() -> None:
     step = 0
     renderer = Renderer(
         delay=0.05,
-        condition_label=cond.name,
+        condition_label=current_condition_label(),
     )
 
     while step < args.steps and renderer.running:
+        renderer.condition_label = current_condition_label()
         sim.step()
         step += 1
         renderer.render(sim, step)
@@ -80,6 +92,8 @@ def main() -> None:
             step = 0
             renderer._history.clear()
             renderer.im_agents = None
+            renderer._agent_panel_kind = None
+            renderer.condition_label = current_condition_label()
 
     renderer.close()
     sim.plot_history(block=True)
