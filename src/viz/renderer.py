@@ -5,10 +5,8 @@ from __future__ import annotations
 import collections
 import time
 
-import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-import matplotlib.colorbar
 import numpy as np
 from matplotlib.image import AxesImage
 from matplotlib.lines import Line2D
@@ -90,7 +88,6 @@ class Renderer:
 
         self.im_agents: AxesImage | None = None
         self.im_res:    AxesImage | None = None
-        self._bar_container = None
         self._hotspot_scatter = None
         self._shock_scatter   = None
         self._agent_panel_kind: str | None = None

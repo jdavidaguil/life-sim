@@ -1,0 +1,367 @@
+{
+  "environment": "standard",
+  "phase4_warmstart": {
+    "A \u2014 Baseline": {
+      "population_mean": 614.6,
+      "population_std": 62.707575299958776,
+      "probe_spreads": [
+        {
+          "situation": "Rich neighbor no crowd",
+          "mean_spread": 0.2948989748954773,
+          "std_spread": 0.004264749779626807
+        },
+        {
+          "situation": "Rich neighbor crowded",
+          "mean_spread": 0.05541202276945114,
+          "std_spread": 0.001616351503775463
+        },
+        {
+          "situation": "Low energy gradient up",
+          "mean_spread": 0.17161538898944856,
+          "std_spread": 0.0047225473866774345
+        },
+        {
+          "situation": "High energy crowded",
+          "mean_spread": 0.0025074169039726256,
+          "std_spread": 0.0005724402943810732
+        },
+        {
+          "situation": "Uniform neutral",
+          "mean_spread": 0.006856118142604828,
+          "std_spread": 0.001918302807744969
+        },
+        {
+          "situation": "Depleted no crowd",
+          "mean_spread": 0.0029004603624343873,
+          "std_spread": 0.0012169441692285506
+        }
+      ]
+    },
+    "B \u2014 Fast drift": {
+      "population_mean": 620.8,
+      "population_std": 75.35091240323504,
+      "probe_spreads": [
+        {
+          "situation": "Rich neighbor no crowd",
+          "mean_spread": 0.29602264761924746,
+          "std_spread": 0.003812825688668231
+        },
+        {
+          "situation": "Rich neighbor crowded",
+          "mean_spread": 0.05500786751508713,
+          "std_spread": 0.0036153929728411703
+        },
+        {
+          "situation": "Low energy gradient up",
+          "mean_spread": 0.17271660268306732,
+          "std_spread": 0.004787044246075731
+        },
+        {
+          "situation": "High energy crowded",
+          "mean_spread": 0.004368776082992553,
+          "std_spread": 0.0014499641596125228
+        },
+        {
+          "situation": "Uniform neutral",
+          "mean_spread": 0.008329842984676362,
+          "std_spread": 0.002341546460599166
+        },
+        {
+          "situation": "Depleted no crowd",
+          "mean_spread": 0.003351825475692749,
+          "std_spread": 0.0012948276564450193
+        }
+      ]
+    },
+    "C \u2014 Boom/bust": {
+      "population_mean": 607.6,
+      "population_std": 43.64218143035474,
+      "probe_spreads": [
+        {
+          "situation": "Rich neighbor no crowd",
+          "mean_spread": 0.29193066954612734,
+          "std_spread": 0.002298765719942784
+        },
+        {
+          "situation": "Rich neighbor crowded",
+          "mean_spread": 0.05332121402025223,
+          "std_spread": 0.0023634444548493523
+        },
+        {
+          "situation": "Low energy gradient up",
+          "mean_spread": 0.17014839947223664,
+          "std_spread": 0.004386436823467885
+        },
+        {
+          "situation": "High energy crowded",
+          "mean_spread": 0.0031082376837730406,
+          "std_spread": 0.00045547566871464914
+        },
+        {
+          "situation": "Uniform neutral",
+          "mean_spread": 0.007433365285396576,
+          "std_spread": 0.0004995547431157746
+        },
+        {
+          "situation": "Depleted no crowd",
+          "mean_spread": 0.003186844289302826,
+          "std_spread": 0.0004680057716331196
+        }
+      ]
+    },
+    "D \u2014 Combined": {
+      "population_mean": 573.2,
+      "population_std": 31.6379518932563,
+      "probe_spreads": [
+        {
+          "situation": "Rich neighbor no crowd",
+          "mean_spread": 0.2941456913948059,
+          "std_spread": 0.0038600981597071015
+        },
+        {
+          "situation": "Rich neighbor crowded",
+          "mean_spread": 0.053080230951309204,
+          "std_spread": 0.0014864647592880366
+        },
+        {
+          "situation": "Low energy gradient up",
+          "mean_spread": 0.1713405579328537,
+          "std_spread": 0.00371171580957472
+        },
+        {
+          "situation": "High energy crowded",
+          "mean_spread": 0.0028445780277252196,
+          "std_spread": 0.0008039801677494989
+        },
+        {
+          "situation": "Uniform neutral",
+          "mean_spread": 0.00657014399766922,
+          "std_spread": 0.0010264059224611535
+        },
+        {
+          "situation": "Depleted no crowd",
+          "mean_spread": 0.003304959833621979,
+          "std_spread": 0.0005419310034214842
+        }
+      ]
+    },
+    "E \u2014 Steep landscape": {
+      "population_mean": 573.6,
+      "population_std": 20.606794995826014,
+      "probe_spreads": [
+        {
+          "situation": "Rich neighbor no crowd",
+          "mean_spread": 0.29132733941078187,
+          "std_spread": 0.00453476966371595
+        },
+        {
+          "situation": "Rich neighbor crowded",
+          "mean_spread": 0.053200526535511015,
+          "std_spread": 0.0027401132006484655
+        },
+        {
+          "situation": "Low energy gradient up",
+          "mean_spread": 0.1688129723072052,
+          "std_spread": 0.004414142120823568
+        },
+        {
+          "situation": "High energy crowded",
+          "mean_spread": 0.0022176459431648256,
+          "std_spread": 0.0004910509321056022
+        },
+        {
+          "situation": "Uniform neutral",
+          "mean_spread": 0.006402827799320221,
+          "std_spread": 0.0009254444915717803
+        },
+        {
+          "situation": "Depleted no crowd",
+          "mean_spread": 0.002344721555709839,
+          "std_spread": 0.00047480596310878735
+        }
+      ]
+    }
+  },
+  "phase5_warmstart": {
+    "A \u2014 Baseline": {
+      "population_mean": 626.6,
+      "population_std": 25.12050954897213,
+      "probe_spreads": [
+        {
+          "situation": "Rich neighbor no crowd",
+          "mean_spread": 0.29469646215438844,
+          "std_spread": 0.0031739666906066572
+        },
+        {
+          "situation": "Rich neighbor crowded",
+          "mean_spread": 0.053659214079380034,
+          "std_spread": 0.0012207254815338306
+        },
+        {
+          "situation": "Low energy gradient up",
+          "mean_spread": 0.17194537520408631,
+          "std_spread": 0.0020792252766408457
+        },
+        {
+          "situation": "High energy crowded",
+          "mean_spread": 0.002309466898441315,
+          "std_spread": 0.0006487730728249198
+        },
+        {
+          "situation": "Uniform neutral",
+          "mean_spread": 0.00831676572561264,
+          "std_spread": 0.002980467758817476
+        },
+        {
+          "situation": "Depleted no crowd",
+          "mean_spread": 0.0036957144737243654,
+          "std_spread": 0.00036921209165491884
+        }
+      ]
+    },
+    "B \u2014 Fast drift": {
+      "population_mean": 535.2,
+      "population_std": 74.79679137503159,
+      "probe_spreads": [
+        {
+          "situation": "Rich neighbor no crowd",
+          "mean_spread": 0.2910953938961029,
+          "std_spread": 0.004760056084830621
+        },
+        {
+          "situation": "Rich neighbor crowded",
+          "mean_spread": 0.05266209542751312,
+          "std_spread": 0.001405270718920341
+        },
+        {
+          "situation": "Low energy gradient up",
+          "mean_spread": 0.16876326203346254,
+          "std_spread": 0.007252776083982876
+        },
+        {
+          "situation": "High energy crowded",
+          "mean_spread": 0.0032538145780563353,
+          "std_spread": 0.00115936960422084
+        },
+        {
+          "situation": "Uniform neutral",
+          "mean_spread": 0.008456742763519287,
+          "std_spread": 0.0024157495095566217
+        },
+        {
+          "situation": "Depleted no crowd",
+          "mean_spread": 0.004407952725887299,
+          "std_spread": 0.001246809141208096
+        }
+      ]
+    },
+    "C \u2014 Boom/bust": {
+      "population_mean": 597.0,
+      "population_std": 50.291152303362466,
+      "probe_spreads": [
+        {
+          "situation": "Rich neighbor no crowd",
+          "mean_spread": 0.2958161234855652,
+          "std_spread": 0.003921068906673338
+        },
+        {
+          "situation": "Rich neighbor crowded",
+          "mean_spread": 0.05373138338327408,
+          "std_spread": 0.0018767183699712057
+        },
+        {
+          "situation": "Low energy gradient up",
+          "mean_spread": 0.17140433192253113,
+          "std_spread": 0.006636829335443901
+        },
+        {
+          "situation": "High energy crowded",
+          "mean_spread": 0.002335163950920105,
+          "std_spread": 0.0003202444760517942
+        },
+        {
+          "situation": "Uniform neutral",
+          "mean_spread": 0.008635313808917999,
+          "std_spread": 0.001148117355187246
+        },
+        {
+          "situation": "Depleted no crowd",
+          "mean_spread": 0.002363389730453491,
+          "std_spread": 0.0007264008416238462
+        }
+      ]
+    },
+    "D \u2014 Combined": {
+      "population_mean": 492.0,
+      "population_std": 72.77087329419649,
+      "probe_spreads": [
+        {
+          "situation": "Rich neighbor no crowd",
+          "mean_spread": 0.29330781698226926,
+          "std_spread": 0.0036941049607309424
+        },
+        {
+          "situation": "Rich neighbor crowded",
+          "mean_spread": 0.0545030876994133,
+          "std_spread": 0.002634277837117973
+        },
+        {
+          "situation": "Low energy gradient up",
+          "mean_spread": 0.17135803401470184,
+          "std_spread": 0.0025483851719171093
+        },
+        {
+          "situation": "High energy crowded",
+          "mean_spread": 0.003426922857761383,
+          "std_spread": 0.0012447841027672887
+        },
+        {
+          "situation": "Uniform neutral",
+          "mean_spread": 0.010742297768592835,
+          "std_spread": 0.0016558592047903125
+        },
+        {
+          "situation": "Depleted no crowd",
+          "mean_spread": 0.004362808167934417,
+          "std_spread": 0.0010761177245461172
+        }
+      ]
+    },
+    "E \u2014 Steep landscape": {
+      "population_mean": 585.8,
+      "population_std": 83.52101531949909,
+      "probe_spreads": [
+        {
+          "situation": "Rich neighbor no crowd",
+          "mean_spread": 0.29812184572219846,
+          "std_spread": 0.0044178975759664235
+        },
+        {
+          "situation": "Rich neighbor crowded",
+          "mean_spread": 0.054872837662696836,
+          "std_spread": 0.0009689198116484161
+        },
+        {
+          "situation": "Low energy gradient up",
+          "mean_spread": 0.1756050705909729,
+          "std_spread": 0.0028238395897402947
+        },
+        {
+          "situation": "High energy crowded",
+          "mean_spread": 0.0025874003767967224,
+          "std_spread": 0.0005377164981299747
+        },
+        {
+          "situation": "Uniform neutral",
+          "mean_spread": 0.007292293012142181,
+          "std_spread": 0.0013454173654892385
+        },
+        {
+          "situation": "Depleted no crowd",
+          "mean_spread": 0.003531360626220703,
+          "std_spread": 0.000696264685628514
+        }
+      ]
+    }
+  }
+}

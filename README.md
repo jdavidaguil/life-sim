@@ -28,12 +28,16 @@ src/
     policy.py       – TraitPolicy: continuous trait vector + movement scoring
     simulation.py   – Top-level simulation loop and history tracking
   viz/
-    renderer.py     – Matplotlib desktop renderer (3-panel: trait map, resource map, trait bars)
+    renderer.py     – Matplotlib desktop renderer with live maps and history panels
     server.py       – HTTP server for browser-based renderer (port 7777)
     static/
       index.html    – Browser renderer: 4-panel canvas (agents, resources, population, traits)
 experiments/
   phase2.py         – Headless multi-seed experiment: 4 environmental volatility conditions
+  phase3.py         – Richer-perception trait policy vs Phase 2 baseline
+  phase4.py         – Neural policy experiment
+  phase5.py         – Stateful neural policy with warm start
+  phase6_baseline.py – Phase 4 and 5 warm-start rerun on the standard environment
 tests/
   run.py            – Default runner using the desktop renderer
 ```
@@ -59,12 +63,32 @@ python -m tests.run --condition D          # Combined   (drift_step=3, noise_rat
 python -m tests.run --condition C --seed 42 --steps 1000
 ```
 
+Available desktop strategy modes:
+
+```bash
+python -m tests.run --policy-mode baseline         --condition B --steps 1000 --seed 42
+python -m tests.run --policy-mode richer           --condition B --steps 1000 --seed 42
+python -m tests.run --policy-mode neural           --condition B --steps 1000 --seed 42
+python -m tests.run --policy-mode phase5           --condition B --steps 1000 --seed 42
+python -m tests.run --policy-mode phase6-neural    --condition B --steps 1000 --seed 42
+python -m tests.run --policy-mode phase6-stateful  --condition B --steps 1000 --seed 42
+```
+
+Strategy mapping:
+1. `baseline` — Phase 1 style trait policy
+2. `richer` — Phase 3 richer perception
+3. `neural` — Phase 4 neural policy
+4. `phase5` — Phase 5 stateful warm-start preset
+5. `phase6-neural` — Phase 6 neural warm-start on the standard environment
+6. `phase6-stateful` — Phase 6 stateful warm-start on the standard environment
+
 Keyboard shortcuts while the window is open:
 
 | Key | Action |
 |-----|--------|
 | `p` | Pause / resume |
 | `e` | Toggle agent panel between trait colours and energy heatmap |
+| `m` | Restart with the next policy preset |
 | `q` | Quit |
 
 ### Phase 2 experiment — 4 conditions × N seeds
@@ -84,6 +108,22 @@ Prints a mean ± std comparison table, then opens three Matplotlib figures:
 1. **Trait trajectories** — per-condition per-trait mean ± 1σ over time  
 2. **End-state distributions** — histograms of trait values at final step (all seeds pooled)  
 3. **Population + trait overview** — population count and all-trait means with fill bands
+
+### Later-phase experiment entrypoints
+
+```bash
+# Phase 3: richer perception vs Phase 2
+python -m experiments.phase3 --steps 1000 --seed 42 --seeds 5
+
+# Phase 4: neural policy
+python -m experiments.phase4 --steps 1000 --seed 42 --seeds 5
+
+# Phase 5: stateful neural policy
+python -m experiments.phase5 --condition B --steps 1000 --seed 42
+
+# Phase 6: Phase 4 vs Phase 5 warm-start on the standard environment
+python -m experiments.phase6_baseline --steps 1000 --seed 42 --seeds 5
+```
 
 ## Environment configuration
 
