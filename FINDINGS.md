@@ -37,32 +37,52 @@ All multi-condition experiments run with 5 seeds × 1000 steps.
 
 ---
 
-## Finding 1 — Random movement dominates in stable resource environments
+## Finding 1 — Simple directional tracking doesn't pay, but contextual navigation does
 
-In the Phase 1 baseline, selection consistently drives the trait vector toward:
+This is the central finding of the project, and it requires careful framing.
 
-- **Noise: 0.58** (high randomness)
-- **Resource weight: 0.06** (near-zero directed tracking)
-- **Crowd sensitivity: 0.10**
-- **Energy awareness: 0.11**
+### What the trait phases showed
 
-This result is robust across all five seeds and reached by step ~700. It persists across Phases 2 and 3 regardless of environment configuration or perception richness.
+In Phases 1–3, the trait vector converged toward:
 
-The Phase 4 neural network (224 weights, no backpropagation) **independently converges to near-uniform directional output** — rediscovering random walk through a completely different mechanism.
+- **Noise: 0.58** (high movement randomness)
+- **Resource weight: 0.06** (near-zero directed food tracking)
+- **Crowd sensitivity: 0.74** (strong crowd avoidance)
+- **Energy awareness: 0.34** (Phase 3, with richer perception)
 
-**Four mechanisms, one consistent answer.**
+At first glance this looks like "random movement wins." But that misreads what the agents were actually doing.
 
-### Why this happens
+The agents were not moving randomly. They were **diffuse, crowd-avoiding, energy-responsive wanderers** — a specific adaptive strategy. High noise means pure directional tracking of food wasn't worth the evolutionary cost. But crowd sensitivity of 0.74 and rising energy awareness mean the other traits were doing real work. Agents actively avoided dense cells and adjusted behavior based on their energy state.
 
-With 4 hotspots on a 50×50 grid (sigma=4.0) and noise events averaging 3 per step, directed movement reaches resources with nearly the same frequency as random movement. The benefit of tracking is near-zero; the cost, in evolutionary terms, is zero too — but selection has no reason to maintain the structure.
+The trait vector simply lacked the expressive power to encode something more sophisticated: **conditional, directionally specific responses.**
+
+### What the neural phases revealed
+
+The warm-started neural genome (Phase 4) encodes crowd avoidance *per direction*, not as a scalar penalty. The result:
+
+| Situation | Behavior |
+|-----------|----------|
+| Rich neighbor, no crowd | North prob **0.364** — moves toward food |
+| Rich neighbor, crowded | North prob drops to **0.169** — avoids the crowd specifically |
+| Uniform neutral | ~0.125 — correctly uncertain when there's no signal |
+
+That's not random movement. That's context-sensitive navigation — move toward food *unless* it's crowded, in which case prefer another direction.
+
+**Phase 4 and 5 consistently outperform Phases 1–3 in population** (615–627 vs ~490–500), which is the clearest evidence that the trait vector finding was a limitation of representation, not a fundamental truth about the environment.
+
+### The complete picture
+
+Simple directional tracking — high resource weight, ignoring crowd and energy signals — doesn't pay in this environment. The food distribution and noise level mean that chasing the nearest hotspot isn't reliably better than wandering.
+
+But **contextual navigation does pay**: crowd-aware, energy-sensitive movement that responds to the full local situation rather than a single signal. The neural genome found this. The trait vector approximated it but couldn't fully express it.
 
 ### Falsifiable statement
 
-*In spatially stable resource environments with regenerating hotspots, random movement is fitness-equivalent to informed movement at these population densities and resource regeneration rates.*
+*In this resource environment, simple scalar food-tracking does not outcompete diffuse crowd-avoiding movement. Contextual, directionally specific crowd-avoidance with food-tracking produces consistently higher populations than either pure tracking or pure wandering.*
 
 ---
 
-## Finding 2 — Environmental volatility shifts trait attractors
+## Finding 2 — Environmental volatility shifts trait attractors and maintains diversity
 
 Across Phase 2 conditions, traits respond systematically to environmental parameters:
 
@@ -76,8 +96,8 @@ Across Phase 2 conditions, traits respond systematically to environmental parame
 Key patterns:
 - **Fast drift** raises resource weight — predictable hotspot movement rewards tracking
 - **Boom/bust** raises noise and energy awareness — unpredictable shocks reward flexibility
-- **Combined volatility** produces the highest cross-seed variance — populations under identical conditions reach different attractors
-- **Crowd sensitivity is highest in stable environments** — density-dependent competition is the primary selection pressure when resources are predictable
+- **Combined volatility** produces the highest cross-seed variance — no single strategy dominates
+- **Crowd sensitivity is highest in stable environments** — density-dependent competition is the primary pressure when resources are predictable
 
 ### Falsifiable statement
 
@@ -87,16 +107,13 @@ Key patterns:
 
 ## Finding 3 — Richer perception increases strategy diversity, not mean fitness
 
-Phase 3 added three inputs to the scoring function:
-- Resource gradient direction
-- Local agent density as a continuous signal
-- Relative energy compared to the population mean
+Phase 3 added three inputs to the scoring function: resource gradient direction, local agent density as a continuous signal, and relative energy compared to the population mean.
 
-**Energy awareness rose in all four conditions** compared to Phase 2. But mean population did not increase. The key effect is behavioral diversification: Phase 3 populations diverge more across seeds than Phase 2. Different seeds reach different trait attractors under identical conditions.
+**Energy awareness rose in all four conditions** compared to Phase 2. But mean population did not increase. The effect is behavioral diversification: Phase 3 populations diverge more across seeds than Phase 2. Different seeds reach different trait attractors under identical conditions.
 
-More information enables more viable strategies — it does not select for one better dominant strategy.
+More information enables more viable strategies — it does not immediately select for one better dominant strategy. The representational limit of the trait vector meant that richer inputs could shift which traits were emphasized, but couldn't encode the conditional behavior the neural genome eventually found.
 
-### Phase 2 vs Phase 3 — Condition A (Baseline)
+### Phase 2 vs Phase 3 — Condition A
 
 | Trait | Phase 2 | Phase 3 |
 |-------|---------|---------|
@@ -107,7 +124,7 @@ More information enables more viable strategies — it does not select for one b
 
 ### Falsifiable statement
 
-*Increasing perception richness increases the number of viable behavioral strategies the population explores, not the fitness of the best strategy.*
+*Increasing perception richness increases the number of viable behavioral strategies the population explores. The fitness ceiling rises only when the genome has sufficient expressive power to encode conditional responses to the richer inputs.*
 
 ---
 
@@ -117,22 +134,18 @@ More information enables more viable strategies — it does not select for one b
 
 Neural genomes initialized near zero undergo **neutral evolution**:
 - Max weight remains below 0.5 after 1000+ steps
-- Probe spreads (directional sensitivity) stay at 0.01–0.06 (near-uniform)
+- Probe spreads stay at 0.01–0.06 (near-uniform — no directional preference)
 - Genome norm grows from ~1.6 to ~3.0 — pure mutation accumulation, not adaptation
 
-This occurs across all tested environment configurations, including steep resource gradients with zero noise.
+This occurs across all tested environment configurations. The fitness landscape around random initialization is too flat for gradient-free selection to navigate within these timescales.
 
 ### Warm start (initialized from Phase 3 linear solution)
 
 Encoding the Phase 3 attractor as initial weights (`rw=2.0`, `cs=1.5`) produces **stabilizing selection**:
 
-| Situation | North probability |
-|-----------|-----------------|
-| Max resource north, no crowd | **0.364** |
-| Max resource north, crowded | 0.169 (drops — crowd avoidance working) |
-| Uniform neutral | ~0.125 (near-uniform — correctly uncertain) |
-
-Probe spreads of **0.29–0.31** maintained across all conditions and 1000 steps.
+- North probability with max resource north, no crowd: **0.364**
+- North probability with max resource north, crowded: **0.169** (crowd avoidance working)
+- Probe spreads of **0.29–0.31** maintained across all conditions and 1000 steps
 
 ### Warm start population results (standard environment, 5 seeds)
 
@@ -145,7 +158,7 @@ Probe spreads of **0.29–0.31** maintained across all conditions and 1000 steps
 
 ### Falsifiable statement
 
-*Selection cannot build functional neural representations from random initialization within 1000 steps in this environment. Selection can maintain functional complexity, but not assemble it. Warm initialization from a functional solution is a prerequisite.*
+*Selection cannot build functional neural representations from random initialization within 1000 steps in this environment. Selection can maintain functional complexity but not assemble it. Warm initialization from a functional intermediate is a prerequisite for neural genome evolution at these timescales.*
 
 ---
 
@@ -155,7 +168,7 @@ Phase 5 adds a 4-value persistent state vector to the neural genome (292 total w
 
 - **State vector std: 0.07 → 0.09** — agents diverge into distinct memory patterns
 - **State vector mean: ~0.00** — no single memory strategy dominates
-- **Probe spreads: ~0.29** — observation pathway (resource tracking, crowd avoidance) is fully preserved
+- **Probe spreads: ~0.29** — core navigation behavior fully preserved
 
 Phase 5 vs Phase 4 at step 1000:
 
@@ -167,7 +180,7 @@ Phase 5 vs Phase 4 at step 1000:
 | D — Combined | 573 ± 32 | 492 ± 73 | 0.294 | 0.293 |
 | E — Steep | 574 ± 21 | 586 ± 84 | 0.291 | 0.298 |
 
-Phase 5 underperforms Phase 4 in volatile conditions (B, D) due to additional mutation noise from 68 extra weights. In stable conditions it matches or edges ahead.
+Phase 5 underperforms in volatile conditions (B, D) due to extra mutation noise from 68 additional weights. In stable conditions it matches or edges ahead. The state pathway is diversifying without yet providing consistent fitness benefit — this environment doesn't reward within-episode spatial memory.
 
 ### Falsifiable statement
 
@@ -177,42 +190,42 @@ Phase 5 underperforms Phase 4 in volatile conditions (B, D) due to additional mu
 
 ## Cross-Phase Summary
 
-The most consistent result across all six phases is the dominance of random movement as a survival strategy. This result emerges independently through:
+The progression across phases tells a coherent story about the relationship between **representational power** and **adaptive behavior**:
 
-1. **Phase 1** — Noise trait rises to 0.58 under direct trait selection
-2. **Phase 2** — Noise rises in all four environmental conditions
-3. **Phase 3** — Noise dominant despite access to gradient, density, and energy signals
-4. **Phase 4** — Neural network independently converges to near-uniform directional output
+| Phase | What agents could express | Peak population |
+|-------|--------------------------|-----------------|
+| 0 | Two fixed strategies | ~500 |
+| 1–3 | Scalar trait combinations | ~490–500 |
+| 4 warm | Directionally specific, conditional navigation | ~615 |
+| 5 warm | Same + persistent memory | ~627 |
 
-The second consistent result is that selection can maintain functional complexity but cannot assemble it from scratch within these timescales. The path to complex adaptation runs through functional intermediates.
+Each step up in expressiveness produced a better strategy — not because the environment changed, but because the genome could finally encode what the environment was rewarding. Crowd avoidance was always valuable. The trait vector could only express it as a scalar; the neural genome expressed it per direction. That difference is worth ~125 agents.
+
+The deeper finding: **the apparent strategy of a population tells you as much about the genome's expressive limits as about the environment's structure.** When trait phases showed high noise, that wasn't purely environmental. It was partly a signal that the trait vector had reached its ceiling.
 
 ---
 
 ## Portable Statements
 
-These findings are stated abstractly, independent of simulation parameters:
+1. **Simple tracking often loses to diffuse crowd-aware wandering** in environments with broadly distributed, noisy resources. The benefit of precise food tracking must exceed the cost; in many real resource landscapes, it doesn't.
 
-1. **Informativeness determines whether perception evolves.** When the benefit of tracking the environment is near-zero, selection does not maintain tracking structures — even when they are available for free.
+2. **Volatility maintains diversity.** Stable environments collapse strategy space to a single attractor. Volatile environments sustain multiple viable strategies simultaneously.
 
-2. **Volatility is a diversity-maintaining force.** Stable environments drive populations to a single attractor. Volatile environments sustain multiple viable strategies simultaneously.
+3. **More perception expands the strategy space; richer genomes are needed to exploit it.** Inputs that selection can't yet act on due to representational limits accumulate silently, waiting for a genome expressive enough to use them.
 
-3. **More inputs expand the strategy space, not the fitness ceiling.** Richer perception increases behavioral variance across populations, not the quality of the best individual strategy.
+4. **Selection maintains functional complexity but rarely assembles it.** Starting from a working solution and exploring variations is far more efficient than starting from random initialization at short evolutionary timescales.
 
-4. **Selection maintains; it rarely assembles.** Functional complexity requires a starting point. Mutation from random initialization faces a flat fitness landscape that gradient-free selection cannot navigate efficiently at short timescales.
-
-5. **Memory diversifies before it improves.** Adding within-episode history first differentiates agents from each other. Fitness improvement from memory requires an environment that specifically rewards remembering.
+5. **Memory diversifies before it improves.** Fitness advantage from memory requires an environment that specifically rewards remembering.
 
 ---
 
 ## What's Next
 
-Open experiments planned:
-
-- **Competition between lineages** — two populations with different genomes competing for the same resources. Does complexity win, or does faster reproduction?
-- **Cooperation vs. defection** — agents that can share or defect on the same cell. Under what conditions does cooperation evolve?
-- **Predator-prey coevolution** — two agent types evolving simultaneously. Do arms races produce directional progress?
-- **Memory-advantaged environments** — alternating resource patches designed so within-episode spatial history provides a real advantage. Does memory finally earn its fitness cost?
-- **Extended timescales** — 10,000+ step runs to test whether cold-start neural evolution eventually produces functional representations
+- **Memory-advantaged environments** — alternating patches where spatial memory of recently depleted areas would genuinely help
+- **Competition between lineages** — two populations with different genomes competing for the same resources
+- **Cooperation vs. defection** — agents that can share or take on shared cells
+- **Predator-prey coevolution** — two agent types evolving simultaneously
+- **Extended timescales** — 10,000+ step runs to test cold-start neural evolution
 
 ---
 
@@ -226,7 +239,7 @@ Open experiments planned:
 
 **Neural architecture (Phase 4):** 18 inputs × 8 hidden (ReLU) × 8 outputs (softmax). Directions: NW, N, NE, W, E, SW, S, SE
 
-**Warm-start encoding:** W1 diagonal = resource weight (2.0), crowd-input diagonal = −crowd sensitivity (−1.5), W2 = identity
+**Warm-start encoding:** W1 diagonal = resource weight (2.0), crowd-input diagonal = −1.5, W2 = identity
 
 **Internal state (Phase 5):** 4-value tanh vector, persists across steps, reset to zero at birth
 
