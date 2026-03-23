@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal as _Signal
 from PySide6.QtWidgets import (
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -79,6 +80,10 @@ class _PlotTab(QWidget):
         self._canvas = FigureCanvasQTAgg(self._fig)
         self._layout.addWidget(self._canvas)
 
+    @property
+    def figure(self) -> plt.Figure:
+        return self._fig
+
     def set_figure(self, fig: plt.Figure) -> None:
         """Replace the canvas widget with a fresh one bound to *fig*."""
         old_fig = self._fig
@@ -119,6 +124,10 @@ class _CompareTab(QWidget):
         self._fig.patch.set_facecolor("#111111")
         self._canvas = FigureCanvasQTAgg(self._fig)
         root.addWidget(self._canvas)
+
+    @property
+    def figure(self) -> plt.Figure:
+        return self._fig
 
     def _populate_list(self) -> None:
         self._list.clear()
@@ -162,15 +171,23 @@ class ResultsPanel(QWidget):
         Mating Events, Compare
     """
 
+    status_message: _Signal = _Signal(str)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 4, 0, 0)
 
-        # Header row: label + Load Latest button
+        # Header row: label + Load Latest button + Export PNG button
         header = QHBoxLayout()
         header.addWidget(QLabel("Results"))
         header.addStretch()
+        self._export_btn = QPushButton()
+        self._export_btn.setText("Export PNG")
+        self._export_btn.setMinimumWidth(110)
+        self._export_btn.setFixedWidth(110)
+        self._export_btn.clicked.connect(self._export_png)
+        header.addWidget(self._export_btn)
         self._load_btn = QPushButton("Load Latest")
         self._load_btn.setFixedWidth(100)
         self._load_btn.clicked.connect(self._load_latest)
@@ -235,6 +252,22 @@ class ResultsPanel(QWidget):
         rows = list_results()
         if rows:
             self.load_results(rows[0]["result_id"])
+
+    def _export_png(self) -> None:
+        """Save the currently visible chart tab as a PNG file."""
+        tab = self._tabs.currentWidget()
+        fig = getattr(tab, "figure", None) or getattr(tab, "_fig", None)
+        if fig is None:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export PNG", "", "PNG Images (*.png)"
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".png"):
+            path += ".png"
+        fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        self.status_message.emit(f"Saved: {path}")
 
     def load_results(self, result_id: str) -> None:
         """Load saved runs for *result_id* and render each plot tab.

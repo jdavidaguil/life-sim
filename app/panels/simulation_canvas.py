@@ -12,7 +12,8 @@ from vispy.scene.visuals import Image as ImageVisual
 from vispy.scene.visuals import Markers as MarkersVisual
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QFrame
 
 from app.snapshot import SimSnapshot
 
@@ -224,6 +225,44 @@ class SimulationCanvas(QWidget):
 
         root.addWidget(btn_bar)
 
+        # ── Legend strip ───────────────────────────────────────────────────────
+        legend_bar = QWidget()
+        legend_bar.setFixedHeight(28)
+        legend_bar.setStyleSheet("background-color: #161616;")
+        legend_layout = QHBoxLayout(legend_bar)
+        legend_layout.setContentsMargins(8, 0, 8, 0)
+        legend_layout.setSpacing(10)
+
+        # Resource gradient swatch + label (static)
+        res_swatch = QFrame()
+        res_swatch.setFixedSize(54, 10)
+        res_swatch.setStyleSheet(
+            "QFrame {"
+            "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+            "    stop:0 #ffffcc, stop:1 #006837);"
+            "  border-radius: 2px;"
+            "}"
+        )
+        res_label = QLabel("Resources: Low \u2192 High")
+        res_label.setStyleSheet("color: #888888; font-size: 10px;")
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFixedHeight(14)
+        sep.setStyleSheet("color: #3a3a3a;")
+
+        # Agent legend label (dynamic, updates with mode)
+        self._legend_label = QLabel()
+        self._legend_label.setTextFormat(Qt.TextFormat.RichText)
+        self._legend_label.setStyleSheet("font-size: 10px;")
+
+        legend_layout.addWidget(res_swatch)
+        legend_layout.addWidget(res_label)
+        legend_layout.addWidget(sep)
+        legend_layout.addWidget(self._legend_label)
+        legend_layout.addStretch()
+        root.addWidget(legend_bar)
+
         # ── State ──────────────────────────────────────────────────────────────
         self._active_mode: str = self._DEFAULT_MODE
         self._last_snapshot: SimSnapshot | None = None
@@ -231,6 +270,7 @@ class SimulationCanvas(QWidget):
         # the auto-switch is suppressed for that deliberate choice.
         self._suppress_auto_switch: bool = False
         self._buttons[self._DEFAULT_MODE].setStyleSheet(_BTN_ACTIVE)
+        self._update_legend(self._DEFAULT_MODE)
 
     # ------------------------------------------------------------------
     # Public API
@@ -252,10 +292,7 @@ class SimulationCanvas(QWidget):
             and not self._suppress_auto_switch
             and snapshot.population > 0
         ):
-            same_policy_type = bool(
-                np.all(snapshot.agent_colors == snapshot.agent_colors[0])
-            )
-            if same_policy_type:
+            if snapshot.all_neural:
                 self._set_active_mode("Energy")
                 self._status_label.setText(
                     "All agents are Neural — showing Energy instead."
@@ -296,6 +333,7 @@ class SimulationCanvas(QWidget):
         # user navigates away from Policy and back again.
         self._suppress_auto_switch = key == "Policy"
         self._set_active_mode(key)
+        self._update_legend(key)
         if self._last_snapshot is not None:
             face_colors = self._build_face_colors(self._last_snapshot)
             self._scene.update_frame(self._last_snapshot, face_colors)
@@ -303,6 +341,33 @@ class SimulationCanvas(QWidget):
     # ------------------------------------------------------------------
     # Colour computation
     # ------------------------------------------------------------------
+
+    def _update_legend(self, mode: str) -> None:
+        """Update the agent legend label to reflect the current colour mode."""
+        _LEGEND_HTML: dict[str, str] = {
+            "Policy": (
+                "<span style='color:#ff4444'>&#9679;</span> Trait&nbsp;&nbsp;"
+                "<span style='color:#4488ff'>&#9679;</span> Neural&nbsp;&nbsp;"
+                "<span style='color:#9966cc'>&#9679;</span> Stateful"
+            ),
+            "Energy": (
+                "<span style='color:#ff4444'>&#9679;</span> Low energy&nbsp;&nbsp;"
+                "<span style='color:#44cc44'>&#9679;</span> High energy"
+            ),
+            "Crowd Sens": (
+                "<span style='color:#4488ff'>&#9679;</span> Low&nbsp;&nbsp;"
+                "<span style='color:#ff4444'>&#9679;</span> High"
+            ),
+            "Noise": (
+                "<span style='color:#4488ff'>&#9679;</span> Low&nbsp;&nbsp;"
+                "<span style='color:#ffee44'>&#9679;</span> High"
+            ),
+            "Resource Wt": (
+                "<span style='color:#4488ff'>&#9679;</span> Low&nbsp;&nbsp;"
+                "<span style='color:#ff9922'>&#9679;</span> High"
+            ),
+        }
+        self._legend_label.setText(_LEGEND_HTML.get(mode, ""))
 
     def _build_face_colors(self, snapshot: SimSnapshot) -> np.ndarray:
         """Return RGBA face colours for all agents, shape (N, 4) float32."""

@@ -107,7 +107,9 @@ class MainWindow(QMainWindow):
         # ── Signal wiring ─────────────────────────────────────────────────────
         self._experiment_panel.run_requested.connect(self._on_run_requested)
         self._experiment_panel.stop_requested.connect(self._on_stop_requested)
-
+        self._results_panel.status_message.connect(
+            lambda msg: self.statusBar().showMessage(msg, 3000)
+        )
     # ------------------------------------------------------------------
     # Slots
     # ------------------------------------------------------------------
@@ -146,6 +148,7 @@ class MainWindow(QMainWindow):
         worker.step_ready.connect(self._on_step_ready)
         worker.run_complete.connect(self._on_run_complete)
         worker.error.connect(self._on_worker_error)
+        worker.progress.connect(self._experiment_panel.update_progress)
         self._canvas.frame_consumed.connect(worker.on_frame_consumed)
 
     def _disconnect_worker(self, worker: SimWorker) -> None:
@@ -153,6 +156,7 @@ class MainWindow(QMainWindow):
             worker.step_ready.disconnect(self._on_step_ready)
             worker.run_complete.disconnect(self._on_run_complete)
             worker.error.disconnect(self._on_worker_error)
+            worker.progress.disconnect(self._experiment_panel.update_progress)
             self._canvas.frame_consumed.disconnect(worker.on_frame_consumed)
         except RuntimeError:
             pass  # already disconnected

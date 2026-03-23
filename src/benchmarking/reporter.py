@@ -78,6 +78,14 @@ def _result_id_from(results: list[dict]) -> str:
     return results[0].get("result_id", "") if results else ""
 
 
+def _experiment_name_from(results: list[dict]) -> str:
+    """Return the experiment name, falling back to result_id."""
+    if not results:
+        return ""
+    rid = results[0].get("result_id", "")
+    return results[0].get("name") or rid
+
+
 # ── data loading ──────────────────────────────────────────────────────────────
 
 def list_results() -> list[dict]:
@@ -158,7 +166,7 @@ def plot_population_history(results: list[dict]) -> plt.Figure:
     available; falls back to a single final-population point otherwise.
     Title: ``'{result_id} — Population History'``
     """
-    rid = results[0].get("result_id", "") if results else ""
+    name = _experiment_name_from(results)
 
     # Keep only most recent result per seed.
     seen: dict = {}
@@ -167,7 +175,7 @@ def plot_population_history(results: list[dict]) -> plt.Figure:
     results = list(seen.values())
 
     fig, ax = _make_figure(figsize=(10, 5))
-    ax.set_title(f"{rid} — Population History", color=_TEXT)
+    ax.set_title(f"{name} — Population History", color=_TEXT)
 
     handles = []
     labels = []
@@ -213,9 +221,9 @@ def plot_final_population(results: list[dict]) -> plt.Figure:
         seen[r.get("seed")] = r
     results = list(seen.values())
 
-    rid = _result_id_from(results)
+    name = _experiment_name_from(results)
     fig, ax = _make_figure(figsize=(8, 5))
-    ax.set_title(f"{rid} — Final Population by Seed", color=_TEXT)
+    ax.set_title(f"{name} — Final Population by Seed", color=_TEXT)
 
     seeds = [r.get("seed", i) for i, r in enumerate(results)]
     pops  = [r.get("final_population", 0) for r in results]
@@ -255,15 +263,15 @@ def plot_trait_convergence(results: list[dict]) -> plt.Figure:
         seen[r.get("seed")] = r
     results = list(seen.values())
 
-    rid = _result_id_from(results)
-    trait_keys  = ["mean_resource_weight", "mean_crowd_sensitivity",
-                   "mean_noise", "mean_energy_awareness"]
+    name = _experiment_name_from(results)
+    # New per-step keys written by worker; fall back to old reporter keys.
+    trait_keys  = ["mean_rw", "mean_cs", "mean_noise", "mean_ea"]
     short_names = ["rw", "cs", "noise", "ea"]
     ylabels     = ["Resource weight", "Crowd sensitivity", "Noise", "Energy awareness"]
 
-    fig, axes = _make_figure(2, 2, figsize=(12, 8), sharex=False)
+    fig, axes = _make_figure(2, 2, figsize=(10, 7), sharex=False)
     axes_flat = axes.flatten()
-    fig.suptitle(f"{rid} — Trait Convergence", color=_TEXT, fontsize=12)
+    fig.suptitle(f"{name} — Trait Convergence", color=_TEXT, fontsize=12)
 
     for col_idx, (tkey, sname, ylabel) in enumerate(
         zip(trait_keys, short_names, ylabels)
@@ -272,16 +280,23 @@ def plot_trait_convergence(results: list[dict]) -> plt.Figure:
         ax.set_title(sname, color=_TEXT, fontsize=10)
         plotted = False
         for i, result in enumerate(results):
-            series = _trait_series(result, tkey)
-            if series is not None:
-                seed = result.get("seed", i)
-                color = _SEED_COLORS[i % len(_SEED_COLORS)]
-                ax.plot(series, color=color, lw=1.0, alpha=0.85,
-                        label=f"seed {seed}")
-                plotted = True
+            metrics = result.get("metrics") or {}
+            series = metrics.get(tkey)
+            if not (isinstance(series, list) and series):
+                continue
+            seed = result.get("seed", i)
+            color = _SEED_COLORS[i % len(_SEED_COLORS)]
+            step_hist = metrics.get("step_history")
+            xs = step_hist if isinstance(step_hist, list) and len(step_hist) == len(series) else range(len(series))
+            ax.plot(xs, series, color=color, lw=1.0, alpha=0.85,
+                    label=f"seed {seed}")
+            plotted = True
         if not plotted:
-            ax.text(0.5, 0.5, "no data", transform=ax.transAxes,
+            ax.text(0.5, 0.55, "no data", transform=ax.transAxes,
                     ha="center", va="center", color=_SUBTLE, fontsize=10)
+            ax.text(0.5, 0.42, "(re-run experiment to collect trait history)",
+                    transform=ax.transAxes,
+                    ha="center", va="center", color=_SUBTLE, fontsize=8)
         _style_axes(ax, ylabel=ylabel, xlabel="Step")
         if plotted:
             ax.legend(facecolor=_LEGEND_BG, edgecolor=_LEGEND_ED,
@@ -304,9 +319,9 @@ def plot_mating_events(results: list[dict]) -> plt.Figure:
         seen[r.get("seed")] = r
     results = list(seen.values())
 
-    rid = _result_id_from(results)
+    name = _experiment_name_from(results)
     fig, ax = _make_figure(figsize=(10, 5))
-    ax.set_title(f"{rid} — Mating Events per Step", color=_TEXT)
+    ax.set_title(f"{name} — Mating Events per Step", color=_TEXT)
 
     plotted = False
     for i, result in enumerate(results):

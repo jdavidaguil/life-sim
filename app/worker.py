@@ -10,6 +10,7 @@ import numpy as np
 from PySide6.QtCore import QThread, Signal
 
 from src.core.grid import Grid
+from src.core.policy import TraitPolicy
 from src.core.state import SimState
 from src.experiments.base import Experiment
 from app.snapshot import SimSnapshot
@@ -27,6 +28,7 @@ class SimWorker(QThread):
     step_ready: Signal = Signal(object)
     run_complete: Signal = Signal(str)
     error: Signal = Signal(str)
+    progress: Signal = Signal(int, int, str)  # (current_seed_index, total_seeds, seed_value)
 
     def __init__(self, experiment: Experiment, params: dict) -> None:
         super().__init__()
@@ -64,12 +66,33 @@ class SimWorker(QThread):
             self._step_counter = 0
             last_emit: float = 0.0
 
+            seeds_list = self._params.get("seeds", self._experiment.seeds)
+            total_seeds = len(seeds_list)
+            total_steps = self._params.get("steps", self._experiment.steps) or 1
+            total_work = total_seeds * total_steps
+            _seed_idx: list[int] = [0]
+            _current_seed: list[str] = [""]
+
             def on_step(state: SimState) -> None:
                 nonlocal last_emit
                 if self._cancel:
                     raise _Cancelled()
+                # Detect first step of each seed (state.step resets to 1 for each new SimState).
+                if state.step == 1 and _seed_idx[0] < total_seeds:
+                    sv = seeds_list[_seed_idx[0]] if _seed_idx[0] < len(seeds_list) else _seed_idx[0]
+                    _current_seed[0] = str(sv)
+                    _seed_idx[0] += 1
+                completed = (_seed_idx[0] - 1) * total_steps + state.step
+                self.progress.emit(completed, total_work, _current_seed[0])
                 state.metrics.setdefault("population_history", []).append(len(state.agents))
                 state.metrics.setdefault("step_history", []).append(state.step)
+                trait_agents = [a for a in state.agents if hasattr(a.policy, "traits")]
+                if trait_agents:
+                    traits = np.array([a.policy.traits for a in trait_agents])
+                    state.metrics.setdefault("mean_rw",    []).append(float(traits[:, 0].mean()))
+                    state.metrics.setdefault("mean_cs",    []).append(float(traits[:, 1].mean()))
+                    state.metrics.setdefault("mean_noise", []).append(float(traits[:, 2].mean()))
+                    state.metrics.setdefault("mean_ea",    []).append(float(traits[:, 3].mean()))
                 self._step_counter += 1
                 now = time.monotonic()
                 if now - last_emit >= SimWorker._EMIT_INTERVAL:
@@ -127,6 +150,7 @@ def _build_snapshot(state: SimState) -> SimSnapshot:
              for a in agents],
             dtype=np.float32,
         )
+        all_neural = all(not isinstance(a.policy, TraitPolicy) for a in agents)
     else:
         xs = np.empty((0,), dtype=np.int32)
         ys = np.empty((0,), dtype=np.int32)
@@ -134,6 +158,7 @@ def _build_snapshot(state: SimState) -> SimSnapshot:
         energies = np.empty((0,), dtype=np.float32)
         dirs = np.empty((0, 2), dtype=np.int8)
         traits = np.empty((0, 4), dtype=np.float32)
+        all_neural = False
 
     mating = state.scratch.get("mating_events", 0)
 
@@ -153,4 +178,5 @@ def _build_snapshot(state: SimState) -> SimSnapshot:
             "population": n,
             "mating_events": mating,
         },
+        all_neural=all_neural,
     )

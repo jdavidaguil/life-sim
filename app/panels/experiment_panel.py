@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QProgressBar,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -71,13 +72,13 @@ class ExperimentPanel(QWidget):
         meta_layout.addWidget(self._meta_name)
 
         self._meta_desc = QLabel()
-        self._meta_desc.setStyleSheet("color: #aaaaaa; font-size: 12px;")
+        self._meta_desc.setStyleSheet("color: #aaaaaa; font-size: 13px;")
         self._meta_desc.setWordWrap(True)
         self._meta_desc.setMaximumHeight(52)  # ~3 lines
         meta_layout.addWidget(self._meta_desc)
 
         self._meta_params = QLabel()
-        self._meta_params.setStyleSheet("color: #888888; font-size: 9px;")
+        self._meta_params.setStyleSheet("color: #888888; font-size: 13px;")
         self._meta_params.setWordWrap(True)
         meta_layout.addWidget(self._meta_params)
 
@@ -100,6 +101,11 @@ class ExperimentPanel(QWidget):
 
         root.addLayout(form)
 
+        self._seeds_error = QLabel("Enter at least one valid integer seed.")
+        self._seeds_error.setStyleSheet("color: #ff5555; font-size: 10px;")
+        self._seeds_error.setVisible(False)
+        root.addWidget(self._seeds_error)
+
         # ── Run / Stop buttons ────────────────────────────────────────────────
         btn_row = QHBoxLayout()
         self._run_btn = QPushButton("Run")
@@ -108,6 +114,19 @@ class ExperimentPanel(QWidget):
         btn_row.addWidget(self._run_btn)
         btn_row.addWidget(self._stop_btn)
         root.addLayout(btn_row)
+
+        # ── Progress bar (hidden until a run begins) ──────────────────────────
+        self._progress_bar = QProgressBar()
+        self._progress_bar.setRange(0, 1)
+        self._progress_bar.setValue(0)
+        self._progress_bar.setFixedHeight(12)
+        self._progress_bar.setTextVisible(False)
+        self._progress_bar.setStyleSheet(
+            "QProgressBar { background: #2a2a2a; border: 1px solid #444; border-radius: 3px; }"
+            "QProgressBar::chunk { background: #4a9eff; border-radius: 3px; }"
+        )
+        self._progress_bar.setVisible(False)
+        root.addWidget(self._progress_bar)
 
         # ── Status label ──────────────────────────────────────────────────────
         self._status_label = QLabel("Ready")
@@ -136,6 +155,11 @@ class ExperimentPanel(QWidget):
             return
 
         seeds = self._parse_seeds(self._seeds_edit.text())
+        if not seeds:
+            self._seeds_error.setVisible(True)
+            return
+        self._seeds_error.setVisible(False)
+
         params: dict = {
             "steps": self._steps_spin.value(),
             "seeds": seeds,
@@ -157,6 +181,9 @@ class ExperimentPanel(QWidget):
 
         self._meta_name.setText(exp.name)
         self._meta_desc.setText(exp.description)
+
+        # Pre-populate seeds from the experiment's defaults.
+        self._seeds_edit.setText(", ".join(str(s) for s in exp.seeds))
 
         drift = exp.env_config.get("drift_step", 1)
         noise_rate = exp.env_config.get("noise_rate", 3.0)
@@ -189,7 +216,16 @@ class ExperimentPanel(QWidget):
     def set_idle(self) -> None:
         """Reset UI to idle state after a run completes or is stopped."""
         self._set_running(False)
+        self._progress_bar.setVisible(False)
+        self._progress_bar.setValue(0)
         self._status_label.setText("Done")
+
+    def update_progress(self, current: int, total: int, seed: str) -> None:
+        """Update the progress bar; called each time a new seed starts."""
+        self._progress_bar.setRange(0, total)
+        self._progress_bar.setValue(current)
+        self._progress_bar.setVisible(True)
+        self._status_label.setText(f"Seed {seed}  ({current + 1}/{total})")
 
     # ------------------------------------------------------------------
     # Helpers
@@ -202,6 +238,8 @@ class ExperimentPanel(QWidget):
         self._steps_spin.setEnabled(not running)
         self._seeds_edit.setEnabled(not running)
         if running:
+            self._progress_bar.setVisible(False)
+            self._progress_bar.setValue(0)
             self._status_label.setText("Running…")
 
     def _current_key(self) -> str:

@@ -36,3 +36,4 @@ class SimSnapshot:
     agent_traits: np.ndarray    # (N, 4) float32 — [resource_weight, crowd_sensitivity, noise, energy_awareness]
     population: int
     step_metrics: dict
+    all_neural: bool = False  # True when every living agent uses a neural (non-trait) policy

@@ -200,6 +200,7 @@ class Experiment:
                 )
                 payload = {
                     "result_id": self.result_id,
+                    "name": self.name,
                     "seed": seed,
                     "steps": self.steps,
                     "env_config": self.env_config,
