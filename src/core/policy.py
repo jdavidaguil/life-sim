@@ -214,7 +214,7 @@ def _make_warm_start_genome(
 class NeuralPolicy:
     """Neural genome policy — 4 inputs → 8 hidden (ReLU) → 8 outputs (softmax).
 
-    The genome is a flat numpy array of 112 weights:
+    The genome is a flat numpy array of 224 weights:
         W1: shape (18, 8) — input to hidden, indices 0:144
         b1: shape (8,)    — hidden biases,   indices 144:152
         W2: shape (8, 8)  — hidden to output, indices 152:216

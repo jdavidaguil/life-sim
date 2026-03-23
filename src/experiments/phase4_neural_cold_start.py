@@ -1,7 +1,7 @@
 """Phase 4 experiment: neural genome policy.
 
 Replaces the linear scoring function with a small MLP.
-Genome = 112 weights. Selection is the optimizer.
+Genome = 224 weights. Selection is the optimizer.
 Compares against Phase 3 (richer perception) baseline.
 
 Usage:

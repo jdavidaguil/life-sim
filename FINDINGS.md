@@ -304,13 +304,15 @@ The deeper finding across all phases: **the apparent strategy of a population te
 
 **Sexual reproduction (Phase 6):** co-location required, both agents energy > 15.0, mating cost 3.0 per parent, child energy 10.0. Whole-layer crossover: each layer (W1, b1, W2, b2) independently drawn from one parent with 50/50 probability, then Gaussian mutation sigma=0.05 per weight.
 
-**Neural architecture (Phase 4/6):** 18 inputs × 8 hidden (ReLU) × 8 outputs (softmax). Directions: NW, N, NE, W, E, SW, S, SE
+**Neural architecture (Phase 4/6):** 18 inputs × 8 hidden (ReLU) × 8 outputs (softmax) = **224 weights**. Directions: NW, N, NE, W, E, SW, S, SE
 
 **Warm-start encoding:** W1 diagonal = resource weight (2.0), crowd-input diagonal = −1.5, W2 = identity. Phase 6 adds noise σ=0.1 at initialization to seed diversity.
 
-**Internal state (Phase 5):** 4-value tanh vector, persists across steps, reset to zero at birth
+**Internal state (Phase 5):** 4-value tanh vector, persists across steps, reset to zero at birth. Total genome: **292 weights** (18+4)×8+8 + 8×(8+4)+12.
 
-**Experiments:** `src/experiments/phase{1..6}.py`, results in `src/experiments/results/`
+**Experiments:** `src/experiments/` — 23 named entries in `registry.py`. Results written to `results/` as JSON; load via `src/benchmarking/reporter.py`.
+
+**Workbench:** `python -m app.main` — PySide6 GUI with live canvas, experiment picker, and five-tab results viewer.
 
 ---
 

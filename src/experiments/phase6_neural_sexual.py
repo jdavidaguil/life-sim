@@ -104,6 +104,7 @@ EXPERIMENT = Experiment(
     },
     steps=STEPS,
     seeds=SEEDS,
+    policy_mode="neural",
 )
 
 

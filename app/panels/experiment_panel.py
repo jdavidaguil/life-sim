@@ -221,11 +221,17 @@ class ExperimentPanel(QWidget):
         self._status_label.setText("Done")
 
     def update_progress(self, current: int, total: int, seed: str) -> None:
-        """Update the progress bar; called each time a new seed starts."""
+        """Update the progress bar; called every simulation step.
+
+        Args:
+            current: Number of steps completed across all seeds so far.
+            total: Total steps to run across all seeds (steps × seed_count).
+            seed: String label of the seed currently running.
+        """
         self._progress_bar.setRange(0, total)
         self._progress_bar.setValue(current)
         self._progress_bar.setVisible(True)
-        self._status_label.setText(f"Seed {seed}  ({current + 1}/{total})")
+        self._status_label.setText(f"Seed {seed}  ·  {current}/{total} steps")
 
     # ------------------------------------------------------------------
     # Helpers

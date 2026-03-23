@@ -137,17 +137,6 @@ def load_experiment_results(result_id: str) -> list[dict]:
 
 # ── plot helpers ──────────────────────────────────────────────────────────────
 
-def _population_series(result: dict) -> list[int] | None:
-    """Extract per-step population from metrics, or None if not available."""
-    metrics = result.get("metrics") or {}
-    # Common key names written by recorder hooks
-    for key in ("population", "total_population", "pop"):
-        val = metrics.get(key)
-        if isinstance(val, list) and val:
-            return val
-    return None
-
-
 def _trait_series(result: dict, trait_key: str) -> list[float] | None:
     """Return the per-step list for *trait_key* from metrics, or None."""
     metrics = result.get("metrics") or {}

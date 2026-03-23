@@ -19,9 +19,14 @@ class SimSnapshot:
         agent_xs: Agent column positions, shape (N,) int32.
         agent_ys: Agent row positions, shape (N,) int32.
         agent_colors: Per-agent RGB colour, shape (N, 3) float32.
+        agent_energies: Raw energy value per agent, shape (N,) float32.
+        agent_dirs: Last movement direction per agent as (dx, dy), shape (N, 2) int8.
+        agent_traits: Trait vector per agent [resource_weight, crowd_sensitivity,
+            noise, energy_awareness], shape (N, 4) float32.  All zeros for neural agents.
         population: Number of living agents (equals len(agent_xs)).
         step_metrics: Scalar metrics captured at this step (e.g. population,
             mating_events).
+        all_neural: True when every living agent uses a neural (non-trait) policy.
     """
 
     step: int
