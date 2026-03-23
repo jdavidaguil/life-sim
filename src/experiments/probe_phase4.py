@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import gridspec
 
-from experiments.phase2 import CONDITIONS
+from src.experiments.phase2 import CONDITIONS
 from src.core.policy import NeuralPolicy, StatefulNeuralPolicy
 from src.core.simulation import Simulation
 

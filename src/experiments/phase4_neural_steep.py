@@ -5,8 +5,8 @@ landscape) to test whether selection pressure for directional
 sensitivity emerges when resource gradients are strong.
 
 Usage:
-    python -m experiments.phase4_steep
-    python -m experiments.phase4_steep --steps 1000 --seed 42
+    python -m experiments.phase4_neural_steep
+    python -m experiments.phase4_neural_steep --steps 1000 --seed 42
 """
 
 from __future__ import annotations
@@ -16,11 +16,36 @@ import numpy as np
 
 from src.core.simulation import Simulation
 from src.core.policy import NeuralPolicy
-from experiments.phase2 import CONDITIONS
-from experiments.probe_phase4 import (
+from src.core.state import SimState
+from src.experiments.base import Experiment
+from src.experiments.phase2_trait_volatility import CONDITIONS
+from src.experiments.probe_phase4 import (
     PROBE_SITUATIONS,
     probe_population,
     plot_probe_results,
+)
+
+
+def _init_neural_steep(state: SimState) -> None:
+    """Replace agents with NeuralPolicy at step 0."""
+    if state.step != 0:
+        return
+    for agent in state.agents:
+        agent.policy = NeuralPolicy(rng=state.rng)
+
+
+EXPERIMENT = Experiment(
+    additions={"before_move": [_init_neural_steep]},
+    env_config={
+        "drift_step": 1,
+        "noise_rate": 0.0,
+        "noise_magnitude": 0.0,
+        "hotspot_sigma": 3.0,
+        "num_hotspots": 6,
+    },
+    steps=1000,
+    seeds=[42, 43, 44, 45, 46],
+    result_id="phase4_steep",
 )
 
 
@@ -93,7 +118,7 @@ def main() -> None:
                 n_sample=50, rng=rng,
             )
             condition_results.append(probs)
-            from experiments.probe_phase4 import DIR_LABELS
+            from src.experiments.probe_phase4 import DIR_LABELS
             top_dir = DIR_LABELS[np.argmax(probs)]
             print(f"  [{situation['name'].replace(chr(10),' ')}] "
                   f"top: {top_dir} ({probs.max():.3f})  "
@@ -110,3 +135,16 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+EXPERIMENT = Experiment(
+    name="Neural Cold Start — Steep Landscape",
+    description="Condition E: tight hotspots, no noise. Tests if strong gradients rescue cold-start evolution.",
+    result_id="phase4_neural_steep",
+    policy_mode="neural",
+    steps=1000,
+    seeds=[42, 43, 44, 45, 46],
+    save_results=True,
+    env_config={"drift_step": 1, "noise_rate": 0.0, "noise_magnitude": 0.0},
+    grid_config={"HOTSPOT_SIGMA": 3.0, "NUM_HOTSPOTS": 6},
+)

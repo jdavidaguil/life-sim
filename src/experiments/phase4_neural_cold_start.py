@@ -18,8 +18,10 @@ from pathlib import Path
 import numpy as np
 
 from src.core.simulation import Simulation
+from src.core.policy import NeuralPolicy
+from src.core.state import SimState
 from src.experiments.base import Experiment
-from experiments.phase2 import CONDITIONS, Condition, load_results
+from src.experiments.phase2_trait_volatility import CONDITIONS, Condition, load_results
 
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -36,6 +38,23 @@ PHASE4_METRICS = [
     "history_total_lower",
     "history_steps",
 ]
+
+
+def _init_neural_policies(state: SimState) -> None:
+    """Replace agents with NeuralPolicy at step 0."""
+    if state.step != 0:
+        return
+    for agent in state.agents:
+        agent.policy = NeuralPolicy(rng=state.rng)
+
+
+EXPERIMENT = Experiment(
+    additions={"before_move": [_init_neural_policies]},
+    env_config={"drift_step": 1, "noise_rate": 3.0, "noise_magnitude": 2.0},
+    steps=1000,
+    seeds=[42, 43, 44, 45, 46],
+    result_id="phase4",
+)
 
 
 def build_phase4_experiment(
@@ -293,3 +312,42 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+_BASE = dict(
+    policy_mode="neural",
+    steps=1000,
+    seeds=[42, 43, 44, 45, 46],
+    save_results=True,
+)
+
+EXPERIMENTS = {
+    "phase4_neural_A": Experiment(
+        name="Neural Cold Start — Baseline",
+        description="Random-initialized neural genome. Selection cannot assemble function from scratch.",
+        result_id="phase4_neural_A",
+        env_config={"drift_step": 1, "noise_rate": 3.0, "noise_magnitude": 2.0},
+        **_BASE,
+    ),
+    "phase4_neural_B": Experiment(
+        name="Neural Cold Start — Fast Drift",
+        description="Neural cold start under fast drift. Neutral evolution persists regardless.",
+        result_id="phase4_neural_B",
+        env_config={"drift_step": 3, "noise_rate": 3.0, "noise_magnitude": 2.0},
+        **_BASE,
+    ),
+    "phase4_neural_C": Experiment(
+        name="Neural Cold Start — Boom/Bust",
+        description="Neural cold start under boom/bust. No condition rescues cold-start evolution.",
+        result_id="phase4_neural_C",
+        env_config={"drift_step": 1, "noise_rate": 8.0, "noise_magnitude": 4.0},
+        **_BASE,
+    ),
+    "phase4_neural_D": Experiment(
+        name="Neural Cold Start — Combined Volatility",
+        description="Maximum volatility, cold start. Confirms initialization finding across all conditions.",
+        result_id="phase4_neural_D",
+        env_config={"drift_step": 3, "noise_rate": 8.0, "noise_magnitude": 4.0},
+        **_BASE,
+    ),
+}

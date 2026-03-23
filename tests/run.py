@@ -8,9 +8,9 @@ Usage:
 
 import argparse
 
-from experiments.phase2 import CONDITIONS
-from experiments.phase5 import create_phase5_simulation
-from experiments.phase6_baseline import create_phase6_simulation
+from src.experiments.phase2 import CONDITIONS
+from src.experiments.phase5 import create_phase5_simulation
+from src.experiments.phase6_baseline import create_phase6_simulation
 from src.core.simulation import Simulation
 from src.viz.renderer import Renderer
 

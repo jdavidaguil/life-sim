@@ -133,8 +133,6 @@ def run_sweep(
 
     return results
 
-    return results
-
 
 # ── Aggregation helpers ────────────────────────────────────────────────────────
 

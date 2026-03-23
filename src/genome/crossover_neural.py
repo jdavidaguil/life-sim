@@ -59,8 +59,8 @@ def crossover_neural(
 def warm_start_noisy(rng: np.random.Generator, sigma: float = 0.1) -> NeuralPolicy:
     """Return a warm-started ``NeuralPolicy`` with additive Gaussian noise.
 
-    Equivalent to calling warm_start_neural_genome(rw=2.0, cs=1.5) and then
-    perturbing every weight by rng.normal(0, sigma).
+    Builds a warm-start genome via ``NeuralPolicy(warm_start=True, rw=2.0,
+    cs=1.5)`` then perturbs every weight by ``rng.normal(0, sigma)``.
 
     Parameters
     ----------

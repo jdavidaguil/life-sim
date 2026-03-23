@@ -310,7 +310,7 @@ The deeper finding across all phases: **the apparent strategy of a population te
 
 **Internal state (Phase 5):** 4-value tanh vector, persists across steps, reset to zero at birth
 
-**Experiments:** `experiments/phase{1..6}.py`, results in `experiments/results/`
+**Experiments:** `src/experiments/phase{1..6}.py`, results in `src/experiments/results/`
 
 ---
 

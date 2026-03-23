@@ -1,2 +1,4 @@
 numpy
 matplotlib
+PySide6>=6.6
+vispy>=0.14

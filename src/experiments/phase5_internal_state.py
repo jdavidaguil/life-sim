@@ -5,8 +5,8 @@ Uses warm-start initialization from Phase 4 solution.
 Compares against Phase 4 warm-start baseline.
 
 Usage:
-    python -m experiments.phase5
-    python -m experiments.phase5 --steps 1000 --seed 42
+    python -m experiments.phase5_internal_state
+    python -m experiments.phase5_internal_state --steps 1000 --seed 42
 """
 
 from __future__ import annotations
@@ -16,13 +16,14 @@ import numpy as np
 
 from src.core.simulation import Simulation
 from src.core.policy import StatefulNeuralPolicy
+from src.core.state import SimState
 from src.core.grid import Grid
 from src.experiments.base import Experiment
-from experiments.probe_phase4 import (
+from src.experiments.probe_phase4 import (
     PROBE_SITUATIONS, probe_population,
     plot_probe_results, DIR_LABELS,
 )
-from experiments.phase2 import CONDITIONS
+from src.experiments.phase2_trait_volatility import CONDITIONS
 
 
 PHASE5_HOTSPOT_SIGMA: float = 3.0
@@ -34,6 +35,29 @@ PHASE5_METRICS = [
     "state_vector_mean",
     "state_vector_std",
 ]
+
+
+def _init_stateful_policies(state: SimState) -> None:
+    """Replace agents with warm-start StatefulNeuralPolicy at step 0."""
+    if state.step != 0:
+        return
+    for agent in state.agents:
+        agent.policy = StatefulNeuralPolicy(rng=state.rng, warm_start=True)
+
+
+EXPERIMENT = Experiment(
+    additions={"before_move": [_init_stateful_policies]},
+    env_config={
+        "drift_step": 1,
+        "noise_rate": 0.0,
+        "noise_magnitude": 0.0,
+        "hotspot_sigma": 3.0,
+        "num_hotspots": 6,
+    },
+    steps=1000,
+    seeds=[42],
+    result_id="phase5",
+)
 
 
 def build_phase5_env_config(cond) -> dict:
@@ -220,3 +244,43 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+_BASE = dict(
+    policy_mode="stateful_warm",
+    steps=1000,
+    seeds=[42, 43, 44, 45, 46],
+    save_results=True,
+    grid_config={"HOTSPOT_SIGMA": 3.0, "NUM_HOTSPOTS": 6},
+)
+
+EXPERIMENTS = {
+    "phase5_stateful_A": Experiment(
+        name="Internal State — Baseline",
+        description="Persistent memory vector added to neural genome. State diversifies before fitness improves.",
+        result_id="phase5_stateful_A",
+        env_config={"drift_step": 1, "noise_rate": 3.0, "noise_magnitude": 2.0},
+        **_BASE,
+    ),
+    "phase5_stateful_B": Experiment(
+        name="Internal State — Fast Drift",
+        description="Memory under fast drift. Extra weights hurt in volatile conditions.",
+        result_id="phase5_stateful_B",
+        env_config={"drift_step": 3, "noise_rate": 3.0, "noise_magnitude": 2.0},
+        **_BASE,
+    ),
+    "phase5_stateful_C": Experiment(
+        name="Internal State — Boom/Bust",
+        description="Memory under boom/bust. State pathway diversifying without consistent fitness benefit.",
+        result_id="phase5_stateful_C",
+        env_config={"drift_step": 1, "noise_rate": 8.0, "noise_magnitude": 4.0},
+        **_BASE,
+    ),
+    "phase5_stateful_D": Experiment(
+        name="Internal State — Combined Volatility",
+        description="Maximum volatility with memory. Confirms memory needs informative environments.",
+        result_id="phase5_stateful_D",
+        env_config={"drift_step": 3, "noise_rate": 8.0, "noise_magnitude": 4.0},
+        **_BASE,
+    ),
+}

@@ -49,6 +49,8 @@ class Grid:
         drift_step: Optional[int] = None,
         noise_rate: Optional[float] = None,
         noise_magnitude: Optional[float] = None,
+        hotspot_sigma: Optional[float] = None,
+        num_hotspots: Optional[int] = None,
     ) -> None:
         """Initialise the grid, place hotspots, and fill resources accordingly.
 
@@ -60,6 +62,8 @@ class Grid:
             drift_step: Override for DRIFT_STEP (max single-step displacement).
             noise_rate: Override for NOISE_RATE (expected noise events per step).
             noise_magnitude: Override for NOISE_MAGNITUDE (max resource change per event).
+            hotspot_sigma: Override for HOTSPOT_SIGMA (Gaussian spread in grid cells).
+            num_hotspots: Override for NUM_HOTSPOTS (number of resource hotspots).
         """
         if rng is None:
             rng = np.random.default_rng()
@@ -71,6 +75,19 @@ class Grid:
             self.NOISE_RATE = noise_rate
         if noise_magnitude is not None:
             self.NOISE_MAGNITUDE = noise_magnitude
+        if hotspot_sigma is not None:
+            self.HOTSPOT_SIGMA = hotspot_sigma
+        if num_hotspots is not None:
+            self.NUM_HOTSPOTS = num_hotspots
+
+        # Snapshot effective values as instance attributes so that class-level
+        # patches (e.g. from Experiment.grid_config) being restored after
+        # construction don't silently change behaviour on a live instance.
+        self.DRIFT_STEP      = self.DRIFT_STEP
+        self.NOISE_RATE      = self.NOISE_RATE
+        self.NOISE_MAGNITUDE = self.NOISE_MAGNITUDE
+        self.HOTSPOT_SIGMA   = self.HOTSPOT_SIGMA
+        self.NUM_HOTSPOTS    = self.NUM_HOTSPOTS
 
         self._rng = rng
         self.width = width

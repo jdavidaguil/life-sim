@@ -11,19 +11,13 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import dataclass
 from pathlib import Path
 
 from src.core.simulation import Simulation
+from src.core.policy import TraitPolicy
+from src.core.state import SimState
 from src.experiments.base import Experiment
-
-
-@dataclass
-class Condition:
-    name: str
-    drift_step: int
-    noise_rate: float
-    noise_magnitude: float
+from src.experiments.conditions import Condition, CONDITIONS  # noqa: F401  (re-exported)
 
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -53,15 +47,22 @@ PHASE2_METRICS = [
     "traits_final",
 ]
 
-CONDITIONS: list[Condition] = [
-    Condition("A — Baseline",         drift_step=1, noise_rate=3.0, noise_magnitude=2.0),
-    Condition("B — Fast drift",       drift_step=3, noise_rate=3.0, noise_magnitude=2.0),
-    Condition("C — Boom/bust",        drift_step=1, noise_rate=8.0, noise_magnitude=4.0),
-    Condition("D — Combined",         drift_step=3, noise_rate=8.0, noise_magnitude=4.0),
-    Condition("E — Steep landscape",  drift_step=1, noise_rate=0.5, noise_magnitude=1.0),
-]
+
+def _init_baseline_policies(state: SimState) -> None:
+    """Replace agents with baseline-mode TraitPolicy at step 0."""
+    if state.step != 0:
+        return
+    for agent in state.agents:
+        agent.policy = TraitPolicy(rng=state.rng, mode="baseline")
 
 
+EXPERIMENT = Experiment(
+    additions={"before_move": [_init_baseline_policies]},
+    env_config={"drift_step": 1, "noise_rate": 3.0, "noise_magnitude": 2.0},
+    steps=1000,
+    seeds=[42, 43, 44, 45, 46],
+    result_id="phase2",
+)
 def build_phase1_experiment(
     seed: int,
     steps: int,
@@ -489,3 +490,44 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+from src.core.phases.reproduce import reproduce  # noqa: F401, E402
+
+_BASE = dict(
+    policy_mode="trait",
+    steps=1000,
+    seeds=[42, 43, 44, 45, 46],
+    save_results=True,
+)
+
+EXPERIMENTS = {
+    "phase2_trait_A": Experiment(
+        name="Trait Genome — Baseline Environment",
+        description="Trait vector evolution under stable hotspots. Crowd sensitivity dominates.",
+        result_id="phase2_trait_A",
+        env_config={"drift_step": 1, "noise_rate": 3.0, "noise_magnitude": 2.0},
+        **_BASE,
+    ),
+    "phase2_trait_B": Experiment(
+        name="Trait Genome — Fast Drift",
+        description="Fast-drifting hotspots. Resource weight rises as tracking becomes worthwhile.",
+        result_id="phase2_trait_B",
+        env_config={"drift_step": 3, "noise_rate": 3.0, "noise_magnitude": 2.0},
+        **_BASE,
+    ),
+    "phase2_trait_C": Experiment(
+        name="Trait Genome — Boom/Bust",
+        description="High resource noise. Energy awareness and noise trait both rise.",
+        result_id="phase2_trait_C",
+        env_config={"drift_step": 1, "noise_rate": 8.0, "noise_magnitude": 4.0},
+        **_BASE,
+    ),
+    "phase2_trait_D": Experiment(
+        name="Trait Genome — Combined Volatility",
+        description="Maximum volatility. No single strategy dominates — highest cross-seed variance.",
+        result_id="phase2_trait_D",
+        env_config={"drift_step": 3, "noise_rate": 8.0, "noise_magnitude": 4.0},
+        **_BASE,
+    ),
+}

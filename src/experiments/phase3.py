@@ -11,7 +11,7 @@ Usage:
 
 from __future__ import annotations
 
-from experiments.phase2 import (
+from src.experiments.phase2 import (
     CONDITIONS,
     Condition,
     run_condition_multi_seed,
@@ -22,6 +22,7 @@ from experiments.phase2 import (
 )
 import argparse
 
+from src.core.state import SimState
 from src.experiments.base import Experiment
 
 
@@ -39,6 +40,14 @@ PHASE3_METRICS = [
     "agg_history",
     "traits_final",
 ]
+
+# Default EXPERIMENT: Condition A (baseline) env, richer TraitPolicy (default).
+EXPERIMENT = Experiment(
+    env_config={"drift_step": 1, "noise_rate": 3.0, "noise_magnitude": 2.0},
+    steps=1000,
+    seeds=[42, 43, 44, 45, 46],
+    result_id="phase3",
+)
 
 
 def build_phase3_experiment(

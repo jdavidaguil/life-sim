@@ -18,18 +18,37 @@ from pathlib import Path
 
 import numpy as np
 
-from experiments.phase2 import CONDITIONS, Condition
-from experiments.probe_phase4 import (
+from src.experiments.phase2 import CONDITIONS, Condition
+from src.experiments.probe_phase4 import (
     DIR_LABELS,
     PROBE_SITUATIONS,
     probe_population,
 )
 from src.core.grid import Grid
 from src.core.policy import NeuralPolicy, StatefulNeuralPolicy
+from src.core.state import SimState
 from src.core.simulation import Simulation
+from src.experiments.base import Experiment
 
 
 RESULTS_DIR = Path(__file__).parent / "results"
+
+
+def _init_neural_warmstart(state: SimState) -> None:
+    """Replace agents with warm-start NeuralPolicy at step 0."""
+    if state.step != 0:
+        return
+    for agent in state.agents:
+        agent.policy = NeuralPolicy(rng=state.rng, warm_start=True)
+
+
+EXPERIMENT = Experiment(
+    additions={"before_move": [_init_neural_warmstart]},
+    env_config={"drift_step": 1, "noise_rate": 3.0, "noise_magnitude": 2.0},
+    steps=1000,
+    seeds=[42, 43, 44, 45, 46],
+    result_id="phase6_baseline",
+)
 
 
 def build_phase6_env_config(cond: Condition) -> dict:

@@ -2,7 +2,7 @@
 
 Agents initialized with warm-start + noise NeuralPolicy genomes.
 Reproduction via whole-layer crossover (reproduce_sexual_neural).
-Conditions A (baseline) and D (combined volatility) tested.
+Conditions A–D (baseline through combined volatility) tested.
 
 Usage:
     python -m src.experiments.phase6_neural_sexual
@@ -17,10 +17,12 @@ from typing import List
 
 import numpy as np
 
-from experiments.phase2 import CONDITIONS
+from src.experiments.base import Experiment
+from src.experiments.conditions import CONDITIONS
 from src.core.phases import move, consume, decay, die, regenerate, noise, drift
 from src.core.phases.reproduce_sexual_neural import reproduce_sexual_neural
 from src.core.simulation import Simulation
+from src.core.state import SimState
 from src.genome.crossover_neural import warm_start_noisy
 
 # ── experiment knobs ──────────────────────────────────────────────────────────
@@ -77,6 +79,34 @@ def _probe_agents(agents: list, probe_input: np.ndarray, n: int = 20) -> float:
     return float(np.mean(probs_north))
 
 
+# ── Experiment object ────────────────────────────────────────────────────────
+# Mirrors the pattern from phase6_sexual.py, adapted for NeuralPolicy agents.
+
+def _init_neural_policies(state: SimState) -> None:
+    """Replace every agent's policy with a warm-start NeuralPolicy on step 0."""
+    if state.step != 0:
+        return
+    for agent in state.agents:
+        agent.policy = warm_start_noisy(state.rng, sigma=0.1)
+
+
+def _record_mating_events(state: SimState) -> None:
+    """After-die hook: append this step's mating event count to metrics."""
+    count = state.scratch.get("mating_events", 0)
+    state.metrics.setdefault("mating_events", []).append(count)
+
+
+EXPERIMENT = Experiment(
+    overrides={"reproduce": reproduce_sexual_neural},
+    additions={
+        "before_move": [_init_neural_policies],
+        "after_die": [_record_mating_events],
+    },
+    steps=STEPS,
+    seeds=SEEDS,
+)
+
+
 # ── result container ──────────────────────────────────────────────────────────
 
 @dataclass
@@ -92,7 +122,6 @@ class RunResult:
 # ── single run ────────────────────────────────────────────────────────────────
 
 def _run_one(condition, seed: int, steps: int) -> RunResult:
-    from experiments.phase2 import Condition  # local to avoid circular issues
     env_cfg = {
         "drift_step": condition.drift_step,
         "noise_rate": condition.noise_rate,

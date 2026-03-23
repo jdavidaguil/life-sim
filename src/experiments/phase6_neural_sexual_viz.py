@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import argparse
 
-from experiments.phase2 import CONDITIONS
+from src.experiments.conditions import CONDITIONS
 from src.experiments.phase6_neural_sexual import (
     _build_phase_list,
     _replace_policies_warm_start,
@@ -62,12 +62,13 @@ def main() -> None:
         "noise_rate": cond.noise_rate,
         "noise_magnitude": cond.noise_magnitude,
     }
+    phase_list = _build_phase_list()
     label = (
         f"Neural-sexual  |  cond={args.condition} ({cond.name})  "
         f"cost={MATING_COST}  threshold={MATING_THRESHOLD}  seed={args.seed}"
     )
     print(label)
-    print(f"Phase list: {[p.__name__ for p in _build_phase_list()]}")
+    print(f"Phase list: {[p.__name__ for p in phase_list]}")
     print()
 
     sim = Simulation(
@@ -77,7 +78,7 @@ def main() -> None:
         seed=args.seed,
         env_config=env_cfg,
         policy_mode="neural",
-        phases=_build_phase_list(),
+        phases=phase_list,
     )
     _replace_policies_warm_start(sim)
 

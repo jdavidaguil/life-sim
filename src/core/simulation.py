@@ -46,7 +46,7 @@ class Simulation:
             seed: Optional integer seed for reproducible runs.
             env_config: Optional dict of environment overrides (drift_step,
                 noise_rate, noise_magnitude).
-            policy_mode: Movement scorer to use for all agents (`baseline`, `richer`, or `neural`).
+            policy_mode: Movement scorer to use for all agents (`baseline`, `richer`, `neural`, or `stateful`).
             phases: Optional custom phase list.  Defaults to ``DEFAULT_PHASES``.
         """
         self.width = width
@@ -111,11 +111,10 @@ class Simulation:
     def step(self) -> None:
         """Advance the simulation by one time step via the phase-based loop.
 
-        Delegates to :class:`~src.core.loop.SimulationLoop` which runs the
-        eight phases in order: move → consume → decay → reproduce → die →
-        regenerate → noise → drift.  After the loop returns, this method
-        syncs ``current_step``, ``agents``, and ``reproductions_total`` from
-        the shared :class:`~src.core.state.SimState`, then records history.
+        Delegates to :class:`~src.core.loop.SimulationLoop`, which executes
+        the configured phase list in order.  After the loop returns, this
+        method syncs ``current_step``, ``agents``, and ``reproductions_total``
+        from the shared :class:`~src.core.state.SimState`, then records history.
         """
         self._loop.run(self._state, steps=1)
         self.current_step = self._state.step
@@ -196,9 +195,6 @@ class Simulation:
                     f"ea={traits[:,3].mean():.2f}"
                 )
             else:
-                neural_agents = [a for a in self.agents
-                                 if isinstance(a.policy,
-                                    (NeuralPolicy, StatefulNeuralPolicy))]
                 if neural_agents:
                     norms = [float(np.linalg.norm(a.policy.genome))
                              for a in neural_agents]
@@ -209,15 +205,13 @@ class Simulation:
                     )
 
     def plot_history(self, block: bool = True) -> None:  # pragma: no cover
-        """Plot population counts, avg energy, and births per policy over time.
+        """Plot population and genome/trait history over time.
 
-        Opens a standalone Matplotlib figure with three sub-panels:
+        Opens a dark-themed Matplotlib figure with three sub-panels:
 
-        1. **Population** — total, greedy, and explorer agent counts.
-        2. **Avg energy** — mean energy per policy, showing which strategy
-           is better fed at each point in time.
-        3. **Births per step** — reproduction events from each policy,
-           revealing which strategy is expanding faster.
+        1. **Population** — total agent count per step.
+        2. **Mean** — mean genome norm (neural) or mean trait values (trait).
+        3. **Diversity** — std of genome norm or traits; state norm if stateful.
 
         Args:
             block: Whether ``plt.show()`` blocks until the window is closed.
